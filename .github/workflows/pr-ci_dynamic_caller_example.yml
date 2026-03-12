@@ -63,6 +63,9 @@ jobs:
       run_tests_training_ci:     ${{ steps.check.outputs.run_tests_training_ci }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # full clone - very slow! But we need this to compute the set of files to run
+          fetch-depth: 0
 
       - name: Run tests fetcher
         run: |
