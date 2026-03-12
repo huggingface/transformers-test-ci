@@ -68,6 +68,10 @@ jobs:
           # TODO: Check if CircleCI is doing the same.
           fetch-depth: 0
 
+      # so we have main locally
+      - name: Fetch main branch ref
+        run: git fetch origin main:main
+
       - name: Debug
         run: |
           uv pip install -U -e .
