@@ -360,19 +360,15 @@ jobs:
         uses: actions/checkout@v4
 
       # ── 2. Download test preparation artifacts ───────────────────────────────
-      # Maps: attach_workspace (at "test_preparation") + the curl step that
-      # downloads the test list from pipeline.parameters.{job_name}_test_list.
-      #
-      # The caller workflow (equivalent of the CircleCI setup workflow) must
-      # upload an artifact named "{job_name}_test_list" containing the file
-      # "{job_name}_test_list.txt" before invoking this reusable workflow.
+      # Maps: attach_workspace (at "test_preparation").
+      # Downloads the single test-preparation artifact uploaded by the caller,
+      # which contains all {job_name}_test_list.txt files. Each job then reads
+      # its own file from the test_preparation/ directory.
       - name: Download test-list artifact
         uses: actions/download-artifact@v4
         with:
-          name: "${{ inputs.job_name }}_test_list"
+          name: test-preparation
           path: test_preparation/
-        # continue-on-error because some jobs may have an empty / absent list
-        # (in that case the split step will detect an empty file and skip).
         continue-on-error: true
 
       # ── 3. System dependencies ──────────────────────────────────────────────
