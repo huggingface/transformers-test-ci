@@ -283,19 +283,56 @@ jobs:
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "Using image: $IMAGE"
 
+      - name: Download test-preparation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: test-preparation
+          path: test_preparation/
+        continue-on-error: true
+
       - name: Generate shard index array
         id: generate_matrix
-        # Parallelism=0 is treated identically to 1 (single shard), mirroring
-        # the `if self.parallelism:` guard in to_dict().
+        # inputs.parallelism is treated as a MAX CAP, not the exact count.
+        # Actual shard count = min(computed_from_file, inputs.parallelism),
+        # using the same logic as compute_parallel_nodes() in the Python script:
+        #   AVERAGE_TESTS_PER_NODE = 5
+        #   num_nodes = ceil(line_count / AVERAGE_TESTS_PER_NODE)
+        #   if line_count < 4: return 1
+        #   return min(MAX_CAP, num_nodes)
         run: |
-          COUNT=${{ inputs.parallelism }}
-          if [ "$COUNT" -le 1 ]; then
-            echo "matrix=[0]" >> $GITHUB_OUTPUT
-          else
-            INDICES=$(python3 -c "import json; print(json.dumps(list(range($COUNT))))")
-            echo "matrix=$INDICES" >> $GITHUB_OUTPUT
-          fi
-          echo "Shard count: $COUNT"
+          MAX_CAP=${{ inputs.parallelism }}
+          TEST_LIST="test_preparation/${{ inputs.job_name }}_test_list.txt"
+ 
+          COUNT=$(python3 - <<'EOF'
+          import math, os, sys
+ 
+          AVERAGE_TESTS_PER_NODE = 5
+          max_cap = int(os.environ["MAX_CAP"])
+          test_list = os.environ["TEST_LIST"]
+ 
+          try:
+              with open(test_list) as f:
+                  lines = [l.strip() for l in f if l.strip()]
+              line_count = len(lines)
+          except FileNotFoundError:
+              line_count = 0
+ 
+          print(f"Test file count: {line_count}", file=sys.stderr)
+ 
+          if max_cap <= 1 or line_count < 4:
+              print(1)
+          else:
+              num_nodes = math.ceil(line_count / AVERAGE_TESTS_PER_NODE)
+              print(min(max_cap, num_nodes))
+          EOF
+          )
+ 
+          echo "Computed shard count: $COUNT (max cap: $MAX_CAP)"
+          INDICES=$(python3 -c "import json; print(json.dumps(list(range($COUNT))))")
+          echo "matrix=$INDICES" >> $GITHUB_OUTPUT
+        env:
+          MAX_CAP: ${{ inputs.parallelism }}
+          TEST_LIST: test_preparation/${{ inputs.job_name }}_test_list.txt
 
   # ---------------------------------------------------------------------------
   # Job 2 — run
