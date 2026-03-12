@@ -115,7 +115,7 @@ jobs:
                      tests_training_ci; do
             FILE="test_preparation/${job}_test_list.txt"
             if [ -f "$FILE" ]; then
-              echo "$FILE: $(wc -l < "$FILE") lines"
+              echo "$FILE: $(grep -c '' "$FILE") lines"
             else
               echo "$FILE: not found"
             fi
