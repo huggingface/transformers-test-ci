@@ -45,7 +45,7 @@ jobs:
     name: "Test preparation (fetcher)"
     runs-on: ubuntu-22.04
     container:
-      image: huggingface/transformers-consistency
+      image: huggingface/transformers-quality
     outputs:
       # Expose which jobs have a non-empty test list (mirrors the
       # `os.path.isfile(f"{job_name}_test_list.txt")` gate in create_circleci_config)
@@ -64,7 +64,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # full clone - very slow! But we need this to compute the set of files to run
+          # full clone - very slow! But we need this to compute the set of files to run.
+          # TODO: Check if CircleCI is doing the same.
           fetch-depth: 0
 
       - name: Run tests fetcher
