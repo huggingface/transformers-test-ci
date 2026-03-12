@@ -68,6 +68,14 @@ jobs:
           # TODO: Check if CircleCI is doing the same.
           fetch-depth: 0
 
+      - name: Debug
+        run: |
+          uv pip install -U -e .
+          uv pip install -U -e .
+          echo $(pwd)
+          ls -la
+          log -n 10
+
       - name: Run tests fetcher
         run: |
           uv pip install -U -e .

@@ -1124,7 +1124,11 @@ if __name__ == "__main__":
     elif args.filter_tests:
         filter_tests(args.output_file, ["pipelines", "repo_utils"])
     else:
+        print(PATH_TO_REPO)
         repo = Repo(PATH_TO_REPO)
+        print(repo)
+        print(repo.head)
+        print(repo.head.commit)
         commit_message = repo.head.commit.message
         commit_flags = parse_commit_message(commit_message)
         if commit_flags["skip"]:
