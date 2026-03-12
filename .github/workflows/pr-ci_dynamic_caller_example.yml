@@ -107,6 +107,20 @@ jobs:
             fi
           done
 
+      - name: Debug — print test list file sizes
+        run: |
+          for job in tests_torch tests_generate tests_tokenization tests_processors \
+                     pipelines_torch tests_custom_tokenizers examples_torch tests_hub \
+                     tests_exotic_models tests_repo_utils tests_non_model \
+                     tests_training_ci; do
+            FILE="test_preparation/${job}_test_list.txt"
+            if [ -f "$FILE" ]; then
+              echo "$FILE: $(wc -l < "$FILE") lines"
+            else
+              echo "$FILE: not found"
+            fi
+          done
+
       # Upload one artifact per job (replaces pipeline parameter + workspace).
       # The reusable workflow downloads the artifact matching its job_name.
       - name: Upload test list artifacts
