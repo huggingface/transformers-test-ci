@@ -160,92 +160,92 @@ jobs:
 
 
 
-#
-#
-#  # ---------------------------------------------------------------------------
-#  # generate_job = CircleCIJob(
-#  #     "generate",
-#  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-#  #     install_steps=["uv pip install ."],
-#  #     marker="generate",
-#  #     parallelism=6,
-#  # )
-#  # ---------------------------------------------------------------------------
-#  tests_generate:
-#    needs: test-preparation
-#    if: needs.test-preparation.outputs.run_tests_generate == 'true'
-#    uses: ./.github/workflows/reusable_test_job.yml
-#    with:
-#      job_name:          "tests_generate"
-#      docker_image:      "huggingface/transformers-torch-light"
-#      parallelism:       6
-#      marker:            "generate"
-#      install_steps:     "uv pip install ."
-#    secrets:
-#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-#
-#  # ---------------------------------------------------------------------------
-#  # tokenization_job = CircleCIJob(
-#  #     "tokenization",
-#  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-#  #     parallelism=8,
-#  # )
-#  # ---------------------------------------------------------------------------
-#  tests_tokenization:
-#    needs: test-preparation
-#    if: needs.test-preparation.outputs.run_tests_tokenization == 'true'
-#    uses: ./.github/workflows/reusable_test_job.yml
-#    with:
-#      job_name:          "tests_tokenization"
-#      docker_image:      "huggingface/transformers-torch-light"
-#      parallelism:       8
-#    secrets:
-#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-#
-#  # ---------------------------------------------------------------------------
-#  # processor_job = CircleCIJob(
-#  #     "processors",
-#  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-#  #     parallelism=8,
-#  # )
-#  # ---------------------------------------------------------------------------
-#  tests_processors:
-#    needs: test-preparation
-#    if: needs.test-preparation.outputs.run_tests_processors == 'true'
-#    uses: ./.github/workflows/reusable_test_job.yml
-#    with:
-#      job_name:          "tests_processors"
-#      docker_image:      "huggingface/transformers-torch-light"
-#      parallelism:       8
-#    secrets:
-#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-#
-#  # ---------------------------------------------------------------------------
-#  # pipelines_torch_job = CircleCIJob(
-#  #     "pipelines_torch",
-#  #     additional_env={"RUN_PIPELINE_TESTS": True},
-#  #     docker_image=[{"image":"huggingface/transformers-torch-light"}],
-#  #     marker="is_pipeline_test",
-#  #     parallelism=4,
-#  # )
-#  # NOTE: job_name="pipelines_torch" (no tests_ prefix, "pipeline" in name).
-#  # NOTE: report_name must be set explicitly → "tests_pipelines_torch"
-#  #       (mirrors `--make-reports=tests_{self.name}` since "examples" not in name).
-#  # ---------------------------------------------------------------------------
-#  pipelines_torch:
-#    needs: test-preparation
-#    if: needs.test-preparation.outputs.run_pipelines_torch == 'true'
-#    uses: ./.github/workflows/reusable_test_job.yml
-#    with:
-#      job_name:            "pipelines_torch"
-#      report_name:         "tests_pipelines_torch"
-#      docker_image:        "huggingface/transformers-torch-light"
-#      parallelism:         4
-#      marker:              "is_pipeline_test"
-#      run_pipeline_tests:  true
-#    secrets:
-#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-#
+
+
+  # ---------------------------------------------------------------------------
+  # generate_job = CircleCIJob(
+  #     "generate",
+  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+  #     install_steps=["uv pip install ."],
+  #     marker="generate",
+  #     parallelism=6,
+  # )
+  # ---------------------------------------------------------------------------
+  tests_generate:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_generate == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:          "tests_generate"
+      docker_image:      "huggingface/transformers-torch-light"
+      parallelism:       6
+      marker:            "generate"
+      install_steps:     "uv pip install ."
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # tokenization_job = CircleCIJob(
+  #     "tokenization",
+  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+  #     parallelism=8,
+  # )
+  # ---------------------------------------------------------------------------
+  tests_tokenization:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_tokenization == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:          "tests_tokenization"
+      docker_image:      "huggingface/transformers-torch-light"
+      parallelism:       8
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # processor_job = CircleCIJob(
+  #     "processors",
+  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+  #     parallelism=8,
+  # )
+  # ---------------------------------------------------------------------------
+  tests_processors:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_processors == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:          "tests_processors"
+      docker_image:      "huggingface/transformers-torch-light"
+      parallelism:       8
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # pipelines_torch_job = CircleCIJob(
+  #     "pipelines_torch",
+  #     additional_env={"RUN_PIPELINE_TESTS": True},
+  #     docker_image=[{"image":"huggingface/transformers-torch-light"}],
+  #     marker="is_pipeline_test",
+  #     parallelism=4,
+  # )
+  # NOTE: job_name="pipelines_torch" (no tests_ prefix, "pipeline" in name).
+  # NOTE: report_name must be set explicitly → "tests_pipelines_torch"
+  #       (mirrors `--make-reports=tests_{self.name}` since "examples" not in name).
+  # ---------------------------------------------------------------------------
+  pipelines_torch:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_pipelines_torch == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:            "pipelines_torch"
+      report_name:         "tests_pipelines_torch"
+      docker_image:        "huggingface/transformers-torch-light"
+      parallelism:         4
+      marker:              "is_pipeline_test"
+      run_pipeline_tests:  true
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
 #  # ---------------------------------------------------------------------------
 #  # custom_tokenizers_job = CircleCIJob(
 #  #     "custom_tokenizers",

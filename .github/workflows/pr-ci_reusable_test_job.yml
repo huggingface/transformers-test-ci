@@ -306,7 +306,7 @@ jobs:
           COUNT=$(python3 - <<'EOF'
           import math, os, sys
  
-          AVERAGE_TESTS_PER_NODE = 5
+          AVERAGE_TESTS_PER_NODE = 2
           max_cap = int(os.environ["MAX_CAP"])
           test_list = os.environ["TEST_LIST"]
  
