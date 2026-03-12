@@ -269,6 +269,7 @@ jobs:
     name: "Setup — generate shard matrix (${{ inputs.job_name }})"
     runs-on: ubuntu-22.04
     outputs:
+      shard_count: ${{ steps.generate_matrix.outputs.count }}
       shard_matrix: ${{ steps.generate_matrix.outputs.matrix }}
       effective_image: ${{ steps.resolve_image.outputs.image }}
     steps:
@@ -329,6 +330,7 @@ jobs:
  
           echo "Computed shard count: $COUNT (max cap: $MAX_CAP)"
           INDICES=$(python3 -c "import json; print(json.dumps(list(range($COUNT))))")
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
           echo "matrix=$INDICES" >> $GITHUB_OUTPUT
         env:
           MAX_CAP: ${{ inputs.parallelism }}
@@ -340,7 +342,7 @@ jobs:
   # Mirrors CircleCIJob.to_dict() step-by-step.
   # ---------------------------------------------------------------------------
   run:
-    name: "${{ inputs.job_name }} [shard ${{ matrix.shard_index }}/${{ inputs.parallelism <= 1 && '1' || inputs.parallelism }}]"
+    name: "${{ inputs.job_name }} [shard ${{ matrix.shard_index }}/${{ needs.setup.outputs.shard_count }}]"
     needs: setup
 
     # ── Runner selection ──────────────────────────────────────────────────────
