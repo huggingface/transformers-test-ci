@@ -632,15 +632,15 @@ jobs:
       # TODO: Should we really change the path?
       - name: Show skipped tests
         if: always()
-        run: python3 .circleci/scripts/parse_test_outputs.py --file tests_output.txt --skip
+        run: python3 .circleci/parse_test_outputs.py --file tests_output.txt --skip
 
       - name: Show failed tests with reasons
         if: always()
-        run: python3 .circleci/scripts/parse_test_outputs.py --file tests_output.txt --fail
+        run: python3 .circleci/parse_test_outputs.py --file tests_output.txt --fail
 
       - name: Show errors
         if: always()
-        run: python3 .circleci/scripts/parse_test_outputs.py --file tests_output.txt --errors
+        run: python3 .circleci/parse_test_outputs.py --file tests_output.txt --errors
 
       # ── 19-20. Upload artifacts ──────────────────────────────────────────────
       # Maps: store_test_results + store_artifacts steps.
