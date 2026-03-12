@@ -73,6 +73,7 @@ jobs:
           uv pip install -U -e .
           echo $(pwd)
           ls -la
+          git config --global --add safe.directory '*'
           git log -n 10
 
       - name: Run tests fetcher
