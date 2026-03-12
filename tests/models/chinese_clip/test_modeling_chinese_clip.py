@@ -559,6 +559,8 @@ def prepare_img():
     return im
 
 
+a = 3
+
 @require_vision
 @require_torch
 class ChineseCLIPModelIntegrationTest(unittest.TestCase):
