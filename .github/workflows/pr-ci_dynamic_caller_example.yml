@@ -65,7 +65,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run tests fetcher
-        run: python3 utils/tests_fetcher.py --output_dir test_preparation/
+        run: |
+          uv pip install -U -e .
+          # echo 'export "GIT_COMMIT_MESSAGE=$(git show -s --format=%s)"' >> "$BASH_ENV" && source "$BASH_ENV"
+          mkdir -p test_preparation
+          python utils/tests_fetcher.py | tee tests_fetched_summary.txt || true
+          python utils/tests_fetcher.py --filter_tests || true
 
       - name: Check which jobs have tests to run
         id: check
