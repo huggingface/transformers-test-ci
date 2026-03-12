@@ -1129,6 +1129,7 @@ if __name__ == "__main__":
         print(repo)
         print(repo.head)
         print(repo.head.commit)
+        print(repo.head.commit.message)
         commit_message = repo.head.commit.message
         commit_flags = parse_commit_message(commit_message)
         if commit_flags["skip"]:
