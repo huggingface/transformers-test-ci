@@ -71,10 +71,9 @@ jobs:
       - name: Debug
         run: |
           uv pip install -U -e .
-          uv pip install -U -e .
           echo $(pwd)
           ls -la
-          log -n 10
+          git log -n 10
 
       - name: Run tests fetcher
         run: |
