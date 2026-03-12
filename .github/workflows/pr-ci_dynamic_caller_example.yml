@@ -68,9 +68,7 @@ jobs:
           # TODO: Check if CircleCI is doing the same.
           fetch-depth: 0
 
-      # so we have main locally
-      - name: Fetch main branch ref
-        run: git fetch origin main:main
+
 
       - name: Debug
         run: |
@@ -81,6 +79,10 @@ jobs:
           # (even git log -n X will fail without this command)
           git config --global --add safe.directory '*'
           git log -n 5
+
+      # so we have main locally
+      - name: Fetch main branch ref
+        run: git fetch origin main:main
 
       - name: Run tests fetcher
         run: |
