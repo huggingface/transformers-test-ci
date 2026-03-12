@@ -73,6 +73,10 @@ jobs:
           uv pip install -U -e .
           echo $(pwd)
           ls -la
+          # We need this, otherwise `tests_fetcher.py` below will fail with `SHA could not be resolved, git returned: b''` when access ``repo.head.commit`.
+          # (even git log -n X will fail without this command)
+          git config --global --add safe.directory '*'
+          git log -n 5
 
       - name: Run tests fetcher
         run: |
