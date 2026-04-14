@@ -1,0 +1,441 @@
+# =============================================================================
+# .github/workflows/ci_dynamic.yml
+#
+# Caller workflow — equivalent of create_circleci_config.py's
+# create_circleci_config() function + the CircleCI continuation trigger.
+#
+# Structure:
+#   1. test-preparation  →  runs tests_fetcher, uploads {job_name}_test_list
+#                           artifacts (replaces CircleCI workspace + pipeline
+#                           parameters).
+#   2. Per-job calls     →  one `uses:` block per CircleCIJob instance,
+#                           each mapping its fields to reusable_test_job inputs.
+#   3. collection        →  waits for all test jobs, aggregates reports
+#                           (replaces EmptyJob / collection_job).
+#
+# NOTE: This file shows ALL jobs unconditionally for illustration.
+# A real implementation would gate each job on whether its test-list artifact
+# is non-empty (mirroring the `os.path.isfile(f"{job_name}_test_list.txt")`
+# check in create_circleci_config()).
+# =============================================================================
+
+name: CI — Dynamic Test Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"   # nightly
+  workflow_dispatch:
+    inputs:
+      nightly:
+        description: "Run as nightly (enables flaky tests)"
+        type: boolean
+        default: false
+
+jobs:
+  # ===========================================================================
+  # Stage 1 — Test preparation
+  # Equivalent of the CircleCI "setup" workflow that calls the continuation API.
+  # Runs tests_fetcher to produce per-job test list files, then uploads each
+  # as a named artifact consumed by the reusable workflow.
+  # ===========================================================================
+  test-preparation:
+    name: "Test preparation (fetcher)"
+    runs-on: ubuntu-22.04
+    container:
+      image: huggingface/transformers-quality
+    outputs:
+      # Expose which jobs have a non-empty test list (mirrors the
+      # `os.path.isfile(f"{job_name}_test_list.txt")` gate in create_circleci_config)
+      run_tests_torch:           ${{ steps.check.outputs.run_tests_torch }}
+      run_tests_generate:        ${{ steps.check.outputs.run_tests_generate }}
+      run_tests_tokenization:    ${{ steps.check.outputs.run_tests_tokenization }}
+      run_tests_processors:      ${{ steps.check.outputs.run_tests_processors }}
+      run_pipelines_torch:       ${{ steps.check.outputs.run_pipelines_torch }}
+      run_tests_custom_tokenizers: ${{ steps.check.outputs.run_tests_custom_tokenizers }}
+      run_examples_torch:        ${{ steps.check.outputs.run_examples_torch }}
+      run_tests_hub:             ${{ steps.check.outputs.run_tests_hub }}
+      run_tests_exotic_models:   ${{ steps.check.outputs.run_tests_exotic_models }}
+      run_tests_repo_utils:      ${{ steps.check.outputs.run_tests_repo_utils }}
+      run_tests_non_model:       ${{ steps.check.outputs.run_tests_non_model }}
+      run_tests_training_ci:     ${{ steps.check.outputs.run_tests_training_ci }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # full clone - very slow! But we need this to compute the set of files to run.
+          # TODO: Check if CircleCI is doing the same.
+          fetch-depth: 0
+
+
+
+      - name: Debug
+        run: |
+          uv pip install -U -e .
+          echo $(pwd)
+          ls -la
+          # We need this, otherwise `tests_fetcher.py` below will fail with `SHA could not be resolved, git returned: b''` when access ``repo.head.commit`.
+          # (even git log -n X will fail without this command)
+          git config --global --add safe.directory '*'
+          git log -n 5
+
+      # so we have main locally
+      - name: Fetch main branch ref
+        run: git fetch origin main:main
+
+      - name: Run tests fetcher
+        run: |
+          uv pip install -U -e .
+          # echo 'export "GIT_COMMIT_MESSAGE=$(git show -s --format=%s)"' >> "$BASH_ENV" && source "$BASH_ENV"
+          mkdir -p test_preparation
+          python utils/tests_fetcher.py | tee tests_fetched_summary.txt || true
+          python utils/tests_fetcher.py --filter_tests || true
+
+      - name: Check which jobs have tests to run
+        id: check
+        run: |
+          for job in tests_torch tests_generate tests_tokenization tests_processors \
+                     pipelines_torch tests_custom_tokenizers examples_torch tests_hub \
+                     tests_exotic_models tests_repo_utils tests_non_model \
+                     tests_training_ci; do
+            FILE="test_preparation/${job}_test_list.txt"
+            if [ -f "$FILE" ] && [ -s "$FILE" ]; then
+              echo "run_${job}=true" >> $GITHUB_OUTPUT
+            else
+              echo "run_${job}=false" >> $GITHUB_OUTPUT
+            fi
+          done
+
+      - name: Debug — print test list file sizes
+        run: |
+          for job in tests_torch tests_generate tests_tokenization tests_processors \
+                     pipelines_torch tests_custom_tokenizers examples_torch tests_hub \
+                     tests_exotic_models tests_repo_utils tests_non_model \
+                     tests_training_ci; do
+            FILE="test_preparation/${job}_test_list.txt"
+            if [ -f "$FILE" ]; then
+              echo "$FILE: $(grep -c '' "$FILE") lines"
+            else
+              echo "$FILE: not found"
+            fi
+          done
+
+      # Upload one artifact per job (replaces pipeline parameter + workspace).
+      # The reusable workflow downloads the artifact matching its job_name.
+      - name: Upload test list artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-preparation
+          path: test_preparation/
+          retention-days: 3
+
+  # ===========================================================================
+  # Stage 2 — Test jobs
+  # One `uses:` block per CircleCIJob instance.
+  # Each block is a 1:1 mapping of CircleCIJob constructor arguments.
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # torch_job = CircleCIJob(
+  #     "torch",
+  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+  #     marker="not generate",
+  #     parallelism=6,
+  # )
+  # ---------------------------------------------------------------------------
+  tests_torch:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_torch == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:          "tests_torch"
+      docker_image:      "huggingface/transformers-torch-light"
+      parallelism:       6
+      marker:            "not generate"
+      # install_steps, pytest_num_workers, etc. → all defaults
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+
+
+
+
+
+  # ---------------------------------------------------------------------------
+  # generate_job = CircleCIJob(
+  #     "generate",
+  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+  #     install_steps=["uv pip install ."],
+  #     marker="generate",
+  #     parallelism=6,
+  # )
+  # ---------------------------------------------------------------------------
+  tests_generate:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_generate == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:          "tests_generate"
+      docker_image:      "huggingface/transformers-torch-light"
+      parallelism:       6
+      marker:            "generate"
+      install_steps:     "uv pip install ."
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # tokenization_job = CircleCIJob(
+  #     "tokenization",
+  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+  #     parallelism=8,
+  # )
+  # ---------------------------------------------------------------------------
+  tests_tokenization:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_tokenization == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:          "tests_tokenization"
+      docker_image:      "huggingface/transformers-torch-light"
+      parallelism:       8
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # processor_job = CircleCIJob(
+  #     "processors",
+  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+  #     parallelism=8,
+  # )
+  # ---------------------------------------------------------------------------
+  tests_processors:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_processors == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:          "tests_processors"
+      docker_image:      "huggingface/transformers-torch-light"
+      parallelism:       8
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # pipelines_torch_job = CircleCIJob(
+  #     "pipelines_torch",
+  #     additional_env={"RUN_PIPELINE_TESTS": True},
+  #     docker_image=[{"image":"huggingface/transformers-torch-light"}],
+  #     marker="is_pipeline_test",
+  #     parallelism=4,
+  # )
+  # NOTE: job_name="pipelines_torch" (no tests_ prefix, "pipeline" in name).
+  # NOTE: report_name must be set explicitly → "tests_pipelines_torch"
+  #       (mirrors `--make-reports=tests_{self.name}` since "examples" not in name).
+  # ---------------------------------------------------------------------------
+  pipelines_torch:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_pipelines_torch == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:            "pipelines_torch"
+      report_name:         "tests_pipelines_torch"
+      docker_image:        "huggingface/transformers-torch-light"
+      parallelism:         4
+      marker:              "is_pipeline_test"
+      run_pipeline_tests:  true
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+#  # ---------------------------------------------------------------------------
+#  # custom_tokenizers_job = CircleCIJob(
+#  #     "custom_tokenizers",
+#  #     additional_env={"RUN_CUSTOM_TOKENIZERS": True},
+#  #     docker_image=[{"image": "huggingface/transformers-custom-tokenizers"}],
+#  # )
+#  # parallelism=0 (default) → single shard
+#  # ---------------------------------------------------------------------------
+#  tests_custom_tokenizers:
+#    needs: test-preparation
+#    if: needs.test-preparation.outputs.run_tests_custom_tokenizers == 'true'
+#    uses: ./.github/workflows/reusable_test_job.yml
+#    with:
+#      job_name:               "tests_custom_tokenizers"
+#      docker_image:           "huggingface/transformers-custom-tokenizers"
+#      run_custom_tokenizers:  true
+#    secrets:
+#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+#
+#  # ---------------------------------------------------------------------------
+#  # examples_torch_job = CircleCIJob(
+#  #     "examples_torch",
+#  #     additional_env={"OMP_NUM_THREADS": 8},
+#  #     docker_image=[{"image":"huggingface/transformers-examples-torch"}],
+#  #     install_steps=["uv pip install . && uv pip install -r examples/pytorch/_tests_requirements.txt"],
+#  #     pytest_num_workers=4,
+#  # )
+#  # job_name="examples_torch" (no tests_ prefix, "examples" in name).
+#  # ---------------------------------------------------------------------------
+#  examples_torch:
+#    needs: test-preparation
+#    if: needs.test-preparation.outputs.run_examples_torch == 'true'
+#    uses: ./.github/workflows/reusable_test_job.yml
+#    with:
+#      job_name:           "examples_torch"
+#      docker_image:       "huggingface/transformers-examples-torch"
+#      install_steps:      "uv pip install . && uv pip install -r examples/pytorch/_tests_requirements.txt"
+#      pytest_num_workers: 4
+#      omp_num_threads:    8
+#    secrets:
+#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+#
+#  # ---------------------------------------------------------------------------
+#  # hub_job = CircleCIJob(
+#  #     "hub",
+#  #     additional_env={"HUGGINGFACE_CO_STAGING": True},
+#  #     docker_image=[{"image":"huggingface/transformers-torch-light"}],
+#  #     install_steps=["uv pip install .", "git config ...", "git config ..."],
+#  #     marker="is_staging_test",
+#  #     pytest_num_workers=2,
+#  # )
+#  # is_staging_test=true → suppresses HF_TOKEN + adds git config steps.
+#  # Git identity is hardcoded in reusable_test_job.yml (not in install_steps).
+#  # ---------------------------------------------------------------------------
+#  tests_hub:
+#    needs: test-preparation
+#    if: needs.test-preparation.outputs.run_tests_hub == 'true'
+#    uses: ./.github/workflows/reusable_test_job.yml
+#    with:
+#      job_name:           "tests_hub"
+#      docker_image:       "huggingface/transformers-torch-light"
+#      marker:             "is_staging_test"
+#      pytest_num_workers: 2
+#      is_staging_test:    true
+#      # HF_TOKEN intentionally not forwarded (is_staging_test suppresses it)
+#
+#  # ---------------------------------------------------------------------------
+#  # exotic_models_job = CircleCIJob(
+#  #     "exotic_models",
+#  #     docker_image=[{"image":"huggingface/transformers-exotic-models"}],
+#  #     parallelism=4,
+#  #     pytest_options={"durations": 100},
+#  # )
+#  # ---------------------------------------------------------------------------
+#  tests_exotic_models:
+#    needs: test-preparation
+#    if: needs.test-preparation.outputs.run_tests_exotic_models == 'true'
+#    uses: ./.github/workflows/reusable_test_job.yml
+#    with:
+#      job_name:              "tests_exotic_models"
+#      docker_image:          "huggingface/transformers-exotic-models"
+#      parallelism:           4
+#      pytest_extra_options:  "--durations=100"
+#    secrets:
+#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+#
+#  # ---------------------------------------------------------------------------
+#  # repo_utils_job = CircleCIJob(
+#  #     "repo_utils",
+#  #     docker_image=[{"image":"huggingface/transformers-consistency"}],
+#  #     pytest_num_workers=4,
+#  # )
+#  # ---------------------------------------------------------------------------
+#  tests_repo_utils:
+#    needs: test-preparation
+#    if: needs.test-preparation.outputs.run_tests_repo_utils == 'true'
+#    uses: ./.github/workflows/reusable_test_job.yml
+#    with:
+#      job_name:           "tests_repo_utils"
+#      docker_image:       "huggingface/transformers-consistency"
+#      pytest_num_workers: 4
+#    secrets:
+#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+#
+#  # ---------------------------------------------------------------------------
+#  # non_model_job = CircleCIJob(
+#  #     "non_model",
+#  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+#  #     install_steps=["uv pip install .[serving]"],
+#  #     marker="not generate",
+#  #     parallelism=6,
+#  # )
+#  # ---------------------------------------------------------------------------
+#  tests_non_model:
+#    needs: test-preparation
+#    if: needs.test-preparation.outputs.run_tests_non_model == 'true'
+#    uses: ./.github/workflows/reusable_test_job.yml
+#    with:
+#      job_name:          "tests_non_model"
+#      docker_image:      "huggingface/transformers-torch-light"
+#      parallelism:       6
+#      install_steps:     "uv pip install .[serving]"
+#      marker:            "not generate"
+#    secrets:
+#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+#
+#  # ---------------------------------------------------------------------------
+#  # training_ci_job = CircleCIJob(
+#  #     "training_ci",
+#  #     additional_env={"RUN_TRAINING_TESTS": True},
+#  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
+#  #     install_steps=["uv pip install ."],
+#  #     marker="is_training_test",
+#  #     parallelism=6,
+#  # )
+#  # ---------------------------------------------------------------------------
+#  tests_training_ci:
+#    needs: test-preparation
+#    if: needs.test-preparation.outputs.run_tests_training_ci == 'true'
+#    uses: ./.github/workflows/reusable_test_job.yml
+#    with:
+#      job_name:            "tests_training_ci"
+#      docker_image:        "huggingface/transformers-torch-light"
+#      parallelism:         6
+#      install_steps:       "uv pip install ."
+#      marker:              "is_training_test"
+#      run_training_tests:  true
+#    secrets:
+#      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+#
+#  # ---------------------------------------------------------------------------
+#  # ===========================================================================
+#  # Stage 3 — Collection (equivalent of EmptyJob with job_name="collection_job")
+#  # Waits for all test jobs, aggregates test reports.
+#  # Mirrors: poll CircleCI workflow API + process_circleci_workflow_test_reports.py
+#  # ===========================================================================
+#  collection:
+#    name: "Collect and aggregate test results"
+#    runs-on: ubuntu-22.04
+#    # Wait for all test jobs regardless of their outcome.
+#    needs:
+#      - tests_torch
+#      - tests_generate
+#      - tests_tokenization
+#      - tests_processors
+#      - pipelines_torch
+#      - tests_custom_tokenizers
+#      - examples_torch
+#      - tests_hub
+#      - tests_exotic_models
+#      - tests_repo_utils
+#      - tests_non_model
+#      - tests_training_ci
+#    if: always()
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Download all test artifacts
+#        uses: actions/download-artifact@v4
+#        with:
+#          path: outputs/
+#
+#      - name: Aggregate test reports
+#        # Equivalent of process_circleci_workflow_test_reports.py
+#        # Script path updated: .circleci/ → utils/ (or wherever it lives in GHA)
+#        run: python3 utils/process_circleci_workflow_test_reports.py || true
+#
+#      - name: Upload aggregated results
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: aggregated-test-results
+#          path: outputs/
+#          retention-days: 30
