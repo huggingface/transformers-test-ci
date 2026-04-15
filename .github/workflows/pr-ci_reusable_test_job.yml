@@ -483,10 +483,7 @@ jobs:
           
           cat "test_preparation/${{ inputs.job_name }}_test_list.txt"
           
-          TEST_LIST="test_preparation/${{ inputs.job_name }}_test_list.txt"
-          TOTAL_SHARDS=${{ inputs.parallelism <= 1 && 1 || inputs.parallelism }}
-          SHARD_IDX=${{ matrix.shard_index }}
-
+          echo $TEST_LIST
           echo $TOTAL_SHARDS
           echo $SHARD_IDX    
 
@@ -523,7 +520,7 @@ jobs:
           echo "$TESTS" | tr ' ' '\n' | head -30
         env:
           TEST_LIST: test_preparation/${{ inputs.job_name }}_test_list.txt
-          TOTAL_SHARDS: ${{ inputs.parallelism <= 1 && 1 || inputs.parallelism }}
+          TOTAL_SHARDS: ${{ needs.setup.outputs.shard_count }}
           SHARD_IDX: ${{ matrix.shard_index }}
 
       # ── 12. Pre-fetch hub objects ─────────────────────────────────────────────
