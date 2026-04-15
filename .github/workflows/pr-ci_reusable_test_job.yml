@@ -487,6 +487,9 @@ jobs:
           TOTAL_SHARDS=${{ inputs.parallelism <= 1 && 1 || inputs.parallelism }}
           SHARD_IDX=${{ matrix.shard_index }}
 
+          echo $TOTAL_SHARDS
+          echo $SHARD_IDX    
+
           if [ ! -f "$TEST_LIST" ] || [ ! -s "$TEST_LIST" ]; then
             echo "WARNING: test list file not found or empty: $TEST_LIST"
             echo "tests=" >> $GITHUB_OUTPUT
