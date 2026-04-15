@@ -480,6 +480,9 @@ jobs:
       - name: Split test files across shards
         id: split
         run: |
+          
+          cat "test_preparation/${{ inputs.job_name }}_test_list.txt"
+          
           TEST_LIST="test_preparation/${{ inputs.job_name }}_test_list.txt"
           TOTAL_SHARDS=${{ inputs.parallelism <= 1 && 1 || inputs.parallelism }}
           SHARD_IDX=${{ matrix.shard_index }}
