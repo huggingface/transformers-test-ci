@@ -192,6 +192,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Same fix as test-preparation: git tools called by check_modular_conversion.py
+      # fail with "dubious ownership" when the workspace dir is owned by a different UID.
+      - name: Fix git safe directory
+        run: git config --global --add safe.directory '*'
+
       - name: Install system dependencies
         run: apt-get update && apt-get install -y make
 
