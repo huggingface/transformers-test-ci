@@ -173,8 +173,6 @@ jobs:
       marker:            "not generate"
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
       # install_steps, pytest_num_workers, etc. → all defaults
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
 
 
@@ -201,8 +199,6 @@ jobs:
       marker:            "generate"
       install_steps:     "uv pip install ."
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # tokenization_job = CircleCIJob(
@@ -220,8 +216,6 @@ jobs:
       docker_image:      "huggingface/transformers-torch-light"
       parallelism:       8
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # processor_job = CircleCIJob(
@@ -239,8 +233,6 @@ jobs:
       docker_image:      "huggingface/transformers-torch-light"
       parallelism:       8
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # pipelines_torch_job = CircleCIJob(
@@ -266,8 +258,6 @@ jobs:
       marker:              "is_pipeline_test"
       run_pipeline_tests:  true
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # custom_tokenizers_job = CircleCIJob(
@@ -286,8 +276,6 @@ jobs:
       docker_image:           "huggingface/transformers-custom-tokenizers"
       run_custom_tokenizers:  true
       use_dev_image:          ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # examples_torch_job = CircleCIJob(
@@ -310,8 +298,6 @@ jobs:
       pytest_num_workers: 4
       omp_num_threads:    8
       use_dev_image:      ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # exotic_models_job = CircleCIJob(
@@ -331,8 +317,6 @@ jobs:
       parallelism:           4
       pytest_extra_options:  "--durations=100"
       use_dev_image:         ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # repo_utils_job = CircleCIJob(
@@ -351,8 +335,6 @@ jobs:
       pytest_num_workers: 4
       use_dev_image:      ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
       skip_hub_cache:     true
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # non_model_job = CircleCIJob(
@@ -374,8 +356,6 @@ jobs:
       install_steps:     "uv pip install .[serving]"
       marker:            "not generate"
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # training_ci_job = CircleCIJob(
@@ -399,8 +379,6 @@ jobs:
       marker:              "is_training_test"
       run_training_tests:  true
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-    secrets:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # ===========================================================================

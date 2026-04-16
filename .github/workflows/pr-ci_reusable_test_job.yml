@@ -177,16 +177,6 @@ on:
         type: boolean
         default: false
 
-      # hub_job: additional_env={"HUGGINGFACE_CO_STAGING": True}
-      # Also controls: git identity setup + HF_TOKEN suppression (see to_dict).
-      is_staging_test:
-        description: >
-          Set HUGGINGFACE_CO_STAGING=true. Also configures git identity
-          (ci@dummy.com / "ci") and suppresses HF_TOKEN. Used by hub job.
-        required: false
-        type: boolean
-        default: false
-
       # examples_torch_job: additional_env={"OMP_NUM_THREADS": 8}
       # Overrides the COMMON_ENV_VARIABLES default of 1.
       omp_num_threads:
@@ -251,17 +241,6 @@ on:
         type: boolean
         default: false
 
-    # =========================================================================
-    # SECRETS
-    # =========================================================================
-    secrets:
-      HF_TOKEN:
-        # Suppressed for tests_hub (is_staging_test=true), as in to_dict():
-        #   if self.job_name != "tests_hub": env.update({"HF_TOKEN": ...})
-        description: >
-          HuggingFace API token. Not forwarded when is_staging_test=true
-          (the hub job uses HUGGINGFACE_CO_STAGING instead).
-        required: false
 
 # =============================================================================
 # JOBS
@@ -389,16 +368,11 @@ jobs:
       # --- additional_env fields (per-job knobs) ---
       RUN_CUSTOM_TOKENIZERS: ${{ inputs.run_custom_tokenizers }}
       RUN_TRAINING_TESTS: ${{ inputs.run_training_tests }}
-      HUGGINGFACE_CO_STAGING: ${{ inputs.is_staging_test }}
 
       # Conditionally set verbosity overrides (empty string = not set)
       TRANSFORMERS_VERBOSITY: ${{ inputs.transformers_verbosity }}
       DATASETS_VERBOSITY: ${{ inputs.datasets_verbosity }}
       SKIP_CUDA_DOCTEST: ${{ inputs.skip_cuda_doctest && '1' || '0' }}
-
-      # HF_TOKEN is suppressed for the hub/staging job (is_staging_test=true).
-      # Mirrors: if self.job_name != "tests_hub": env.update({"HF_TOKEN": ...})
-      HF_TOKEN: ${{ !inputs.is_staging_test && secrets.HF_TOKEN || '' }}
 
     steps:
 
@@ -425,17 +399,7 @@ jobs:
       - name: Install system dependencies
         run: apt-get update && apt-get install -y curl pigz
 
-      # ── 4. Git identity (staging / hub job only) ─────────────────────────────
-      # Maps: hub_job install_steps git config lines.
-      # Kept separate from install_steps input so callers don't need to embed
-      # shell-quoting workarounds.
-      - name: Configure git identity (hub / staging job)
-        if: inputs.is_staging_test
-        run: |
-          git config --global user.email "ci@dummy.com"
-          git config --global user.name "ci"
-
-      # ── 5. Package installation ──────────────────────────────────────────────
+      # ── 4. Package installation ──────────────────────────────────────────────
       # Maps: CircleCIJob.__post_init__ install_steps list, which always
       # appends two extra installs after the caller-supplied steps:
       #   - custom pytest fork (ydshieh/pytest@8.4.1-ydshieh)
@@ -633,6 +597,8 @@ jobs:
           COMMAND_TIMEOUT: ${{ inputs.command_timeout }}
           PYTEST_NUM_WORKERS: ${{ inputs.pytest_num_workers }}
           PYTEST_EXTRA_OPTIONS: ${{ inputs.pytest_extra_options }}
+          # not critical — mirrors create_circleci_config.py to_dict() HF_TOKEN assignment
+          HF_TOKEN: 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
 
       # ── 15. Check for worker crashes ──────────────────────────────────────────
       # Maps: "Check for test crashes" step with `when: always`.
