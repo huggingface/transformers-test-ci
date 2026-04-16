@@ -197,6 +197,11 @@ jobs:
       - name: Fix git safe directory
         run: git config --global --add safe.directory '*'
 
+      # check_modular_conversion.py calls `git merge-base main HEAD`, which requires
+      # the main ref to exist locally — same reason test-preparation fetches it.
+      - name: Fetch main branch ref
+        run: git fetch origin main:main
+
       - name: Install system dependencies
         run: apt-get update && apt-get install -y make
 
