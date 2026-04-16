@@ -191,6 +191,10 @@ jobs:
       PYTEST_TIMEOUT: 120
     steps:
       - uses: actions/checkout@v4
+        with:
+          # check_modular_conversion.py calls `git merge-base main HEAD`,
+          # which needs full history to find a common ancestor.
+          fetch-depth: 0
 
       # Same fix as test-preparation: git tools called by check_modular_conversion.py
       # fail with "dubious ownership" when the workspace dir is owned by a different UID.
