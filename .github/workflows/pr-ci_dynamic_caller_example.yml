@@ -154,14 +154,7 @@ jobs:
   # Each block is a 1:1 mapping of CircleCIJob constructor arguments.
   # ===========================================================================
 
-  # ---------------------------------------------------------------------------
-  # torch_job = CircleCIJob(
-  #     "torch",
-  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-  #     marker="not generate",
-  #     parallelism=6,
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: torch_job in .circleci/create_circleci_config.py
   tests_torch:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_torch == 'true'
@@ -179,15 +172,7 @@ jobs:
 
 
 
-  # ---------------------------------------------------------------------------
-  # generate_job = CircleCIJob(
-  #     "generate",
-  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-  #     install_steps=["uv pip install ."],
-  #     marker="generate",
-  #     parallelism=6,
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: generate_job in .circleci/create_circleci_config.py
   tests_generate:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_generate == 'true'
@@ -200,13 +185,7 @@ jobs:
       install_steps:     "uv pip install ."
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # tokenization_job = CircleCIJob(
-  #     "tokenization",
-  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-  #     parallelism=8,
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: tokenization_job in .circleci/create_circleci_config.py
   tests_tokenization:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_tokenization == 'true'
@@ -217,13 +196,7 @@ jobs:
       parallelism:       8
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # processor_job = CircleCIJob(
-  #     "processors",
-  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-  #     parallelism=8,
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: processor_job in .circleci/create_circleci_config.py
   tests_processors:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_processors == 'true'
@@ -234,18 +207,9 @@ jobs:
       parallelism:       8
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # pipelines_torch_job = CircleCIJob(
-  #     "pipelines_torch",
-  #     additional_env={"RUN_PIPELINE_TESTS": True},
-  #     docker_image=[{"image":"huggingface/transformers-torch-light"}],
-  #     marker="is_pipeline_test",
-  #     parallelism=4,
-  # )
-  # NOTE: job_name="pipelines_torch" (no tests_ prefix, "pipeline" in name).
-  # NOTE: report_name must be set explicitly → "tests_pipelines_torch"
-  #       (mirrors `--make-reports=tests_{self.name}` since "examples" not in name).
-  # ---------------------------------------------------------------------------
+  # Origin: pipelines_torch_job in .circleci/create_circleci_config.py
+  # NOTE: job_name has no "tests_" prefix; report_name must be set explicitly
+  #       → "tests_pipelines_torch" (mirrors --make-reports=tests_{self.name}).
   pipelines_torch:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_pipelines_torch == 'true'
@@ -259,14 +223,7 @@ jobs:
       run_pipeline_tests:  true
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # custom_tokenizers_job = CircleCIJob(
-  #     "custom_tokenizers",
-  #     additional_env={"RUN_CUSTOM_TOKENIZERS": True},
-  #     docker_image=[{"image": "huggingface/transformers-custom-tokenizers"}],
-  # )
-  # parallelism=0 (default) → single shard
-  # ---------------------------------------------------------------------------
+  # Origin: custom_tokenizers_job in .circleci/create_circleci_config.py
   tests_custom_tokenizers:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_custom_tokenizers == 'true'
@@ -277,16 +234,8 @@ jobs:
       run_custom_tokenizers:  true
       use_dev_image:          ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # examples_torch_job = CircleCIJob(
-  #     "examples_torch",
-  #     additional_env={"OMP_NUM_THREADS": 8},
-  #     docker_image=[{"image":"huggingface/transformers-examples-torch"}],
-  #     install_steps=["uv pip install . && uv pip install -r examples/pytorch/_tests_requirements.txt"],
-  #     pytest_num_workers=4,
-  # )
-  # job_name="examples_torch" (no tests_ prefix, "examples" in name).
-  # ---------------------------------------------------------------------------
+  # Origin: examples_torch_job in .circleci/create_circleci_config.py
+  # NOTE: job_name has no "tests_" prefix ("examples" in name).
   examples_torch:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_examples_torch == 'true'
@@ -299,14 +248,7 @@ jobs:
       omp_num_threads:    8
       use_dev_image:      ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # exotic_models_job = CircleCIJob(
-  #     "exotic_models",
-  #     docker_image=[{"image":"huggingface/transformers-exotic-models"}],
-  #     parallelism=4,
-  #     pytest_options={"durations": 100},
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: exotic_models_job in .circleci/create_circleci_config.py
   tests_exotic_models:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_exotic_models == 'true'
@@ -318,13 +260,7 @@ jobs:
       pytest_extra_options:  "--durations=100"
       use_dev_image:         ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # repo_utils_job = CircleCIJob(
-  #     "repo_utils",
-  #     docker_image=[{"image":"huggingface/transformers-consistency"}],
-  #     pytest_num_workers=4,
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: repo_utils_job in .circleci/create_circleci_config.py
   tests_repo_utils:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_repo_utils == 'true'
@@ -336,15 +272,7 @@ jobs:
       use_dev_image:      ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
       skip_hub_cache:     true
 
-  # ---------------------------------------------------------------------------
-  # non_model_job = CircleCIJob(
-  #     "non_model",
-  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-  #     install_steps=["uv pip install .[serving]"],
-  #     marker="not generate",
-  #     parallelism=6,
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: non_model_job in .circleci/create_circleci_config.py
   tests_non_model:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_non_model == 'true'
@@ -357,16 +285,7 @@ jobs:
       marker:            "not generate"
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
 
-  # ---------------------------------------------------------------------------
-  # training_ci_job = CircleCIJob(
-  #     "training_ci",
-  #     additional_env={"RUN_TRAINING_TESTS": True},
-  #     docker_image=[{"image": "huggingface/transformers-torch-light"}],
-  #     install_steps=["uv pip install ."],
-  #     marker="is_training_test",
-  #     parallelism=6,
-  # )
-  # ---------------------------------------------------------------------------
+  # Origin: training_ci_job in .circleci/create_circleci_config.py
   tests_training_ci:
     needs: test-preparation
     if: needs.test-preparation.outputs.run_tests_training_ci == 'true'
