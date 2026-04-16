@@ -176,6 +176,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fix git safe directory
+        run: git config --global --add safe.directory '*'
+
       # Discard the entire local utils/ first so that any file a contributor may
       # have added (but that does not exist upstream) cannot survive into CI.
       # Then repopulate exclusively from the upstream HuggingFace transformers
