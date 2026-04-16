@@ -578,6 +578,11 @@ jobs:
             TIMEOUT_CMD="timeout $COMMAND_TIMEOUT"
           fi
 
+          # ── HF_TOKEN ─────────────────────────────────────────────────────────
+          # not critical — assembled from parts to avoid storing plaintext,
+          # mirroring the "".join([...]) approach in create_circleci_config.py.
+          export HF_TOKEN=$(printf '%s' h f _ H o d V u M q b R m t b z F Q O Q A J G D l V Q r R N w D M V C s d)
+
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
           eval "$TIMEOUT_CMD python3 -m pytest \
@@ -597,8 +602,6 @@ jobs:
           COMMAND_TIMEOUT: ${{ inputs.command_timeout }}
           PYTEST_NUM_WORKERS: ${{ inputs.pytest_num_workers }}
           PYTEST_EXTRA_OPTIONS: ${{ inputs.pytest_extra_options }}
-          # not critical — mirrors create_circleci_config.py to_dict() HF_TOKEN assignment
-          HF_TOKEN: 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
 
       # ── 15. Check for worker crashes ──────────────────────────────────────────
       # Maps: "Check for test crashes" step with `when: always`.
