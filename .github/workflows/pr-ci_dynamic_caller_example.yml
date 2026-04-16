@@ -149,6 +149,90 @@ jobs:
           retention-days: 3
 
   # ===========================================================================
+  # Stage 1b — Quality checks
+  # Translated from check_code_quality / check_repository_consistency in
+  # .circleci/config.yml. Run in parallel with test-preparation (no dependency).
+  # ===========================================================================
+
+  check_code_quality:
+    name: "Check code quality"
+    runs-on: ubuntu-22.04
+    container:
+      image: huggingface/transformers-quality
+    env:
+      TRANSFORMERS_IS_CI: "true"
+      PYTEST_TIMEOUT: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install quality dependencies
+        run: uv pip install -e ".[quality]"
+
+      - name: Show installed libraries and their versions
+        run: pip freeze | tee installed.txt
+
+      - name: Upload installed list
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-installed
+          path: installed.txt
+          retention-days: 3
+
+      - name: Check code quality
+        run: make check-code-quality
+
+  check_repository_consistency:
+    name: "Check repository consistency"
+    runs-on: ubuntu-22.04
+    container:
+      image: huggingface/transformers-consistency
+    env:
+      TRANSFORMERS_IS_CI: "true"
+      PYTEST_TIMEOUT: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: apt-get update && apt-get install -y make
+
+      - name: Install quality dependencies
+        run: uv pip install -e ".[quality]"
+
+      - name: Show installed libraries and their versions
+        run: pip freeze | tee installed.txt
+
+      - name: Upload installed list
+        uses: actions/upload-artifact@v4
+        with:
+          name: consistency-installed
+          path: installed.txt
+          retention-days: 3
+
+      - name: Check repository consistency
+        run: make check-repository-consistency
+
+      - name: "Test import with all backends (torch + PIL + torchvision)"
+        run: python -c "from transformers import *" || (echo 'import failed with all backends. Fix unprotected imports!!'; exit 1)
+
+      - name: "Test import with torch only (no PIL, no torchvision)"
+        run: |
+          uv pip uninstall Pillow torchvision -q
+          python -c "from transformers import *" || (echo 'import failed with torch only (no PIL). Fix unprotected imports!!'; exit 1)
+          uv pip install -e ".[quality]" -q
+
+      - name: "Test import with PIL only (no torch, no torchvision)"
+        run: |
+          uv pip uninstall torch torchvision torchaudio -q
+          python -c "from transformers import *" || (echo 'import failed with PIL only (no torch). Fix unprotected imports!!'; exit 1)
+          uv pip install -e ".[quality]" -q
+
+      - name: "Test import with torch + PIL, no torchvision"
+        run: |
+          uv pip uninstall torchvision -q
+          python -c "from transformers import *" || (echo 'import failed with torch+PIL but no torchvision. Fix unprotected imports!!'; exit 1)
+          uv pip install -e ".[quality]" -q
+
+  # ===========================================================================
   # Stage 2 — Test jobs
   # One `uses:` block per CircleCIJob instance.
   # Each block is a 1:1 mapping of CircleCIJob constructor arguments.
@@ -166,11 +250,6 @@ jobs:
       marker:            "not generate"
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
       # install_steps, pytest_num_workers, etc. → all defaults
-
-
-
-
-
 
   # Origin: generate_job in .circleci/create_circleci_config.py
   tests_generate:
