@@ -277,12 +277,15 @@ jobs:
       - name: Resolve effective Docker image
         id: resolve_image
         run: |
-          IMAGE="${{ inputs.docker_image }}"
-          if [[ "${{ inputs.use_dev_image }}" == "true" ]]; then
+          IMAGE="$DOCKER_IMAGE"
+          if [[ "$USE_DEV_IMAGE" == "true" ]]; then
             IMAGE="${IMAGE}:dev"
           fi
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "Using image: $IMAGE"
+        env:
+          DOCKER_IMAGE: ${{ inputs.docker_image }}
+          USE_DEV_IMAGE: ${{ inputs.use_dev_image }}
 
       - name: Download test-preparation artifact
         uses: actions/download-artifact@v4
@@ -301,9 +304,6 @@ jobs:
         #   if line_count < 4: return 1
         #   return min(MAX_CAP, num_nodes)
         run: |
-          MAX_CAP=${{ inputs.parallelism }}
-          TEST_LIST="test_preparation/${{ inputs.job_name }}_test_list.txt"
- 
           COUNT=$(python3 - <<'EOF'
           import math, os, sys
  
@@ -433,9 +433,11 @@ jobs:
       #   - pytest-random-order
       - name: Install dependencies
         run: |
-          ${{ inputs.install_steps }}
+          eval "$INSTALL_STEPS"
           uv pip install git+https://github.com/ydshieh/pytest.git@8.4.1-ydshieh
           uv pip install pytest-random-order
+        env:
+          INSTALL_STEPS: ${{ inputs.install_steps }}
 
       # ── 6. NLTK data (examples jobs only) ───────────────────────────────────
       # Maps: {"run": {"name": "Download NLTK files", ...}} with condition
@@ -482,7 +484,7 @@ jobs:
         id: split
         run: |
           # Print inputs for log diagnostics.
-          cat "test_preparation/${{ inputs.job_name }}_test_list.txt"
+          cat "$TEST_LIST"
           echo $TEST_LIST
           echo $TOTAL_SHARDS
           echo $SHARD_IDX
@@ -555,7 +557,6 @@ jobs:
       - name: Run tests
         id: run_tests
         run: |
-          TESTS="${{ steps.split.outputs.tests }}"
           if [ -z "$TESTS" ]; then
             echo "No tests assigned to this shard. Exiting cleanly."
             exit 0
@@ -563,8 +564,8 @@ jobs:
 
           # ── Marker flag ─────────────────────────────────────────────────────
           MARKER_CMD=""
-          if [ -n "${{ inputs.marker }}" ]; then
-            MARKER_CMD="-m '${{ inputs.marker }}'"
+          if [ -n "$MARKER" ]; then
+            MARKER_CMD="-m '$MARKER'"
           fi
 
           # ── COMMON_PYTEST_OPTIONS ────────────────────────────────────────────
@@ -591,29 +592,36 @@ jobs:
 
           # ── --make-reports name ──────────────────────────────────────────────
           # Falls back to job_name when report_name input is empty.
-          REPORT_NAME="${{ inputs.report_name }}"
           if [ -z "$REPORT_NAME" ]; then
-            REPORT_NAME="${{ inputs.job_name }}"
+            REPORT_NAME="$JOB_NAME"
           fi
           MAKE_REPORTS="--make-reports=${REPORT_NAME}"
 
           # ── Timeout wrapper ──────────────────────────────────────────────────
           TIMEOUT_CMD=""
-          if [ "${{ inputs.command_timeout }}" -gt 0 ]; then
-            TIMEOUT_CMD="timeout ${{ inputs.command_timeout }}"
+          if [ "$COMMAND_TIMEOUT" -gt 0 ]; then
+            TIMEOUT_CMD="timeout $COMMAND_TIMEOUT"
           fi
 
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
           eval "$TIMEOUT_CMD python3 -m pytest \
             $MARKER_CMD \
-            -n ${{ inputs.pytest_num_workers }} \
+            -n $PYTEST_NUM_WORKERS \
             $JUNIT_FLAGS \
             $RERUN_FLAGS \
             $COMMON_FLAGS \
-            ${{ inputs.pytest_extra_options }} \
+            $PYTEST_EXTRA_OPTIONS \
             $MAKE_REPORTS \
             $TESTS" | tee tests_output.txt
+        env:
+          TESTS: ${{ steps.split.outputs.tests }}
+          MARKER: ${{ inputs.marker }}
+          REPORT_NAME: ${{ inputs.report_name }}
+          JOB_NAME: ${{ inputs.job_name }}
+          COMMAND_TIMEOUT: ${{ inputs.command_timeout }}
+          PYTEST_NUM_WORKERS: ${{ inputs.pytest_num_workers }}
+          PYTEST_EXTRA_OPTIONS: ${{ inputs.pytest_extra_options }}
 
       # ── 15. Check for worker crashes ──────────────────────────────────────────
       # Maps: "Check for test crashes" step with `when: always`.
