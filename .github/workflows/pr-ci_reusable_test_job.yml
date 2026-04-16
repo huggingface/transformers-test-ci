@@ -1,8 +1,8 @@
 # =============================================================================
-# .github/workflows/reusable_test_job.yml
+# .github/workflows/pr-ci_reusable_test_job.yml
 #
 # Reusable workflow: runs a single Transformers test-suite job.
-# Prototype translated from CircleCIJob / create_circleci_config.py.
+# Translated from CircleCIJob / create_circleci_config.py.
 #
 # Structural mapping summary:
 #
@@ -439,7 +439,8 @@ jobs:
 
       # ── 6. NLTK data (examples jobs only) ───────────────────────────────────
       # Maps: {"run": {"name": "Download NLTK files", ...}} with condition
-      #   `if "example" in self.name`.
+      #   `if "example" in self.name` (CircleCI uses singular; GHA uses
+      #   'examples' — both match the same job names in practice).
       # Avoids concurrency issues when multiple workers download simultaneously.
       - name: Download NLTK files
         if: contains(inputs.job_name, 'examples')
@@ -480,12 +481,11 @@ jobs:
       - name: Split test files across shards
         id: split
         run: |
-          
+          # Print inputs for log diagnostics.
           cat "test_preparation/${{ inputs.job_name }}_test_list.txt"
-          
           echo $TEST_LIST
           echo $TOTAL_SHARDS
-          echo $SHARD_IDX    
+          echo $SHARD_IDX
 
           if [ ! -f "$TEST_LIST" ] || [ ! -s "$TEST_LIST" ]; then
             echo "WARNING: test list file not found or empty: $TEST_LIST"
@@ -633,8 +633,7 @@ jobs:
 
       # ── 16-18. Parse test output (always) ────────────────────────────────────
       # Maps: three parse_test_outputs.py invocations with `when: always`.
-      # NOTE: script path updated from .circleci/ to .github/scripts/.
-      # TODO: Should we really change the path?
+      # Script intentionally kept at .circleci/ — no reason to move it.
       - name: Show skipped tests
         if: always()
         run: python3 .circleci/parse_test_outputs.py --file tests_output.txt --skip
