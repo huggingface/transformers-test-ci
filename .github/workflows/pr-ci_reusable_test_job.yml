@@ -21,7 +21,7 @@
 #  pipeline.parameters.*_test_list   │ actions/download-artifact
 #  attach_workspace                  │ actions/download-artifact
 #  store_test_results / artifacts    │ actions/upload-artifact
-#  CIRCLE_PULL_REQUEST check         │ inputs.is_pr (passed by caller)
+#  CIRCLE_PULL_REQUEST check         │ github.event.pull_request.number
 #  [build-ci-image] commit hack      │ inputs.use_dev_image (boolean)
 #
 # NOT covered here (separate workflow):
@@ -205,17 +205,6 @@ on:
         default: false
 
       # ── Context flags ────────────────────────────────────────────────────────
-      # Maps to: os.environ.get("CIRCLE_PULL_REQUEST", "") == "" check in to_dict()
-      # RUN_FLAKY=true on push/nightly, false on PRs.
-      is_pr:
-        description: >
-          Whether this run is triggered by a pull request.
-          Controls RUN_FLAKY: false on PRs, true otherwise.
-          Mirrors the CIRCLE_PULL_REQUEST env var check in to_dict().
-        required: false
-        type: boolean
-        default: false
-
       # Maps to: pipeline.parameters.nightly
       is_nightly:
         description: "Whether this is a nightly/scheduled run (informational, passed to env)."
@@ -360,9 +349,11 @@ jobs:
       TRANSFORMERS_IS_CI: "true"
       PYTEST_TIMEOUT: 120
       RUN_PIPELINE_TESTS: ${{ inputs.run_pipeline_tests }}
-      # RUN_FLAKY: true on push/nightly, false on PRs
+      # RUN_FLAKY: true on push/nightly, false on PRs.
       # Mirrors: env['RUN_FLAKY'] = os.environ.get("CIRCLE_PULL_REQUEST", "") == ""
-      RUN_FLAKY: ${{ !inputs.is_pr }}
+      # github context is inherited from the caller, so this works whether triggered
+      # directly or via workflow_call from another repo (e.g. public transformers).
+      RUN_FLAKY: ${{ github.event.pull_request.number == '' }}
       DISABLE_SAFETENSORS_CONVERSION: "true"
 
       # --- additional_env fields (per-job knobs) ---
@@ -375,6 +366,21 @@ jobs:
       SKIP_CUDA_DOCTEST: ${{ inputs.skip_cuda_doctest && '1' || '0' }}
 
     steps:
+
+      # ── 0. Debug — print job-level env vars ─────────────────────────────────
+      - name: Print environment variables
+        run: |
+          echo "OMP_NUM_THREADS=$OMP_NUM_THREADS"
+          echo "TRANSFORMERS_IS_CI=$TRANSFORMERS_IS_CI"
+          echo "PYTEST_TIMEOUT=$PYTEST_TIMEOUT"
+          echo "RUN_PIPELINE_TESTS=$RUN_PIPELINE_TESTS"
+          echo "RUN_FLAKY=$RUN_FLAKY"
+          echo "DISABLE_SAFETENSORS_CONVERSION=$DISABLE_SAFETENSORS_CONVERSION"
+          echo "RUN_CUSTOM_TOKENIZERS=$RUN_CUSTOM_TOKENIZERS"
+          echo "RUN_TRAINING_TESTS=$RUN_TRAINING_TESTS"
+          echo "TRANSFORMERS_VERBOSITY=$TRANSFORMERS_VERBOSITY"
+          echo "DATASETS_VERBOSITY=$DATASETS_VERBOSITY"
+          echo "SKIP_CUDA_DOCTEST=$SKIP_CUDA_DOCTEST"
 
       # ── 1. Checkout ─────────────────────────────────────────────────────────
       # Maps: "checkout" step in CircleCI.

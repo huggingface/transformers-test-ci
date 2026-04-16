@@ -32,6 +32,7 @@ on:
         description: "Run as nightly (enables flaky tests)"
         type: boolean
         default: false
+  workflow_call:
 
 jobs:
   # ===========================================================================
