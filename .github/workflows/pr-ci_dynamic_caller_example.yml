@@ -87,15 +87,16 @@ jobs:
       - name: Fetch main branch ref
         run: git fetch origin main:main
 
-      # Discard the entire local utils/ first so that any file a contributor may
-      # have added (but that does not exist upstream) cannot survive into CI.
-      # Then repopulate exclusively from the upstream HuggingFace transformers
-      # main branch, guaranteeing only canonical tooling is executed.
-      - name: Sync utils/ from upstream HuggingFace transformers (main)
-        run: |
-          rm -rf utils/
-          git fetch https://github.com/huggingface/transformers.git main
-          git checkout FETCH_HEAD -- utils/
+#      # TODO: A better way to handle (some) python scripts
+#      # Discard the entire local utils/ first so that any file a contributor may
+#      # have added (but that does not exist upstream) cannot survive into CI.
+#      # Then repopulate exclusively from the upstream HuggingFace transformers
+#      # main branch, guaranteeing only canonical tooling is executed.
+#      - name: Sync utils/ from upstream HuggingFace transformers (main)
+#        run: |
+#          rm -rf utils/
+#          git fetch https://github.com/huggingface/transformers.git main
+#          git checkout FETCH_HEAD -- utils/
 
       # Mirrors CircleCIJob.__post_init__ in create_circleci_config.py:
       #   if "[build-ci-image]" in GIT_COMMIT_MESSAGE or GIT_COMMIT_MESSAGE == "dev-ci":
@@ -179,15 +180,16 @@ jobs:
       - name: Fix git safe directory
         run: git config --global --add safe.directory '*'
 
-      # Discard the entire local utils/ first so that any file a contributor may
-      # have added (but that does not exist upstream) cannot survive into CI.
-      # Then repopulate exclusively from the upstream HuggingFace transformers
-      # main branch, guaranteeing only canonical tooling is executed.
-      - name: Sync utils/ from upstream HuggingFace transformers (main)
-        run: |
-          rm -rf utils/
-          git fetch https://github.com/huggingface/transformers.git main
-          git checkout FETCH_HEAD -- utils/
+#      # TODO: A better way to handle (some) python scripts
+#      # Discard the entire local utils/ first so that any file a contributor may
+#      # have added (but that does not exist upstream) cannot survive into CI.
+#      # Then repopulate exclusively from the upstream HuggingFace transformers
+#      # main branch, guaranteeing only canonical tooling is executed.
+#      - name: Sync utils/ from upstream HuggingFace transformers (main)
+#        run: |
+#          rm -rf utils/
+#          git fetch https://github.com/huggingface/transformers.git main
+#          git checkout FETCH_HEAD -- utils/
 
       - name: Install quality dependencies
         run: uv pip install -e ".[quality]"
@@ -230,15 +232,16 @@ jobs:
       - name: Fetch main branch ref
         run: git fetch origin main:main
 
-      # Discard the entire local utils/ first so that any file a contributor may
-      # have added (but that does not exist upstream) cannot survive into CI.
-      # Then repopulate exclusively from the upstream HuggingFace transformers
-      # main branch, guaranteeing only canonical tooling is executed.
-      - name: Sync utils/ from upstream HuggingFace transformers (main)
-        run: |
-          rm -rf utils/
-          git fetch https://github.com/huggingface/transformers.git main
-          git checkout FETCH_HEAD -- utils/
+#      # TODO: A better way to handle (some) python scripts
+#      # Discard the entire local utils/ first so that any file a contributor may
+#      # have added (but that does not exist upstream) cannot survive into CI.
+#      # Then repopulate exclusively from the upstream HuggingFace transformers
+#      # main branch, guaranteeing only canonical tooling is executed.
+#      - name: Sync utils/ from upstream HuggingFace transformers (main)
+#        run: |
+#          rm -rf utils/
+#          git fetch https://github.com/huggingface/transformers.git main
+#          git checkout FETCH_HEAD -- utils/
 
       - name: Install system dependencies
         run: apt-get update && apt-get install -y make
@@ -457,15 +460,16 @@ jobs:
         with:
           path: outputs/
 
-      # Discard the entire local utils/ first so that any file a contributor may
-      # have added (but that does not exist upstream) cannot survive into CI.
-      # Then repopulate exclusively from the upstream HuggingFace transformers
-      # main branch, guaranteeing only canonical tooling is executed.
-      - name: Sync utils/ from upstream HuggingFace transformers (main)
-        run: |
-          rm -rf utils/
-          git fetch https://github.com/huggingface/transformers.git main
-          git checkout FETCH_HEAD -- utils/
+#      # TODO: A better way to handle (some) python scripts
+#      # Discard the entire local utils/ first so that any file a contributor may
+#      # have added (but that does not exist upstream) cannot survive into CI.
+#      # Then repopulate exclusively from the upstream HuggingFace transformers
+#      # main branch, guaranteeing only canonical tooling is executed.
+#      - name: Sync utils/ from upstream HuggingFace transformers (main)
+#        run: |
+#          rm -rf utils/
+#          git fetch https://github.com/huggingface/transformers.git main
+#          git checkout FETCH_HEAD -- utils/
 
       - name: Aggregate test reports
         # Equivalent of process_circleci_workflow_test_reports.py
