@@ -33,6 +33,11 @@ name: "[Reusable] Run Test Suite Job"
 
 on:
   workflow_call:
+    secrets:
+      OTEL_EXPORTER_OTLP_ENDPOINT:
+        required: false
+      OTEL_EXPORTER_OTLP_HEADERS:
+        required: false
 
     # =========================================================================
     # INPUTS
@@ -384,6 +389,16 @@ jobs:
           echo "TRANSFORMERS_VERBOSITY=$TRANSFORMERS_VERBOSITY"
           echo "DATASETS_VERBOSITY=$DATASETS_VERBOSITY"
           echo "SKIP_CUDA_DOCTEST=$SKIP_CUDA_DOCTEST"
+          if [ -n "$OTEL_EXPORTER_OTLP_ENDPOINT" ]; then
+            echo "OTEL_EXPORTER_OTLP_ENDPOINT is set"
+          else
+            echo "OTEL_EXPORTER_OTLP_ENDPOINT is not set"
+          fi
+          if [ -n "$OTEL_EXPORTER_OTLP_HEADERS" ]; then
+            echo "OTEL_EXPORTER_OTLP_HEADERS is set"
+          else
+            echo "OTEL_EXPORTER_OTLP_HEADERS is not set"
+          fi
 
       # ── 1. Checkout ─────────────────────────────────────────────────────────
       # Maps: "checkout" step in CircleCI.
@@ -595,6 +610,7 @@ jobs:
 
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
+          configure-ci-otel --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
           eval "$TIMEOUT_CMD configure-ci-otel --suite $JOB_NAME -- python3 -m pytest \
             $MARKER_CMD \
             -n $PYTEST_NUM_WORKERS \

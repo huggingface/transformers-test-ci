@@ -33,6 +33,11 @@ on:
         type: boolean
         default: false
   workflow_call:
+    secrets:
+      OTEL_EXPORTER_OTLP_ENDPOINT:
+        required: false
+      OTEL_EXPORTER_OTLP_HEADERS:
+        required: false
 
 jobs:
   # ===========================================================================
