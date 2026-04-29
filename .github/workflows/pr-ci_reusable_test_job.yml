@@ -364,6 +364,9 @@ jobs:
       TRANSFORMERS_VERBOSITY: ${{ inputs.transformers_verbosity }}
       DATASETS_VERBOSITY: ${{ inputs.datasets_verbosity }}
       SKIP_CUDA_DOCTEST: ${{ inputs.skip_cuda_doctest && '1' || '0' }}
+      # Self-hosted OTLP collector wiring. If the secrets are unset, configure-ci-otel is a no-op.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
     steps:
 
@@ -415,6 +418,7 @@ jobs:
           eval "$INSTALL_STEPS"
           uv pip install git+https://github.com/ydshieh/pytest.git@8.4.1-ydshieh
           uv pip install pytest-random-order
+          uv pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
         env:
           INSTALL_STEPS: ${{ inputs.install_steps }}
 
@@ -591,7 +595,7 @@ jobs:
 
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
-          eval "$TIMEOUT_CMD python3 -m pytest \
+          eval "$TIMEOUT_CMD configure-ci-otel --job-name $JOB_NAME -- python3 -m pytest \
             $MARKER_CMD \
             -n $PYTEST_NUM_WORKERS \
             $JUNIT_FLAGS \

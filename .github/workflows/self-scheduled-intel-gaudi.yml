@@ -27,6 +27,9 @@ env:
   PT_ENABLE_INT64_SUPPORT: 1
   HF_TOKEN: ${{ secrets.HF_HUB_READ_TOKEN }}
   HF_HOME: /mnt/cache/.cache/huggingface
+  # Self-hosted OTLP collector wiring. If the secrets are unset, configure-ci-otel is a no-op.
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
 jobs:
   setup:
@@ -130,6 +133,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e .[testing,torch] "numpy<2.0.0" scipy scikit-learn librosa soundfile
+          pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
 
       - name: HL-SMI
         run: |
@@ -157,7 +161,7 @@ jobs:
 
       - name: Run all pipeline tests on Intel Gaudi
         run: |
-          python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_pipelines_torch_gpu_test_reports tests/pipelines -m "not not_device_test"
+          configure-ci-otel --job-name run_pipelines_torch_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_pipelines_torch_gpu_test_reports tests/pipelines -m "not not_device_test"
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -199,6 +203,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e .[testing,torch] "numpy<2.0.0" scipy scikit-learn librosa soundfile
+          pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
 
       - name: HL-SMI
         run: |
@@ -229,7 +234,7 @@ jobs:
       - name: Run examples tests on Intel Gaudi
         run: |
           pip install -r examples/pytorch/_tests_requirements.txt
-          python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_examples_gpu_test_reports examples/pytorch -m "not not_device_test"
+          configure-ci-otel --job-name run_examples_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_examples_gpu_test_reports examples/pytorch -m "not not_device_test"
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -272,6 +277,7 @@ jobs:
         run: |
           pip install -e .[testing,torch] "numpy<2.0.0" scipy scikit-learn librosa soundfile
           pip install git+https://github.com/HabanaAI/DeepSpeed.git@1.20.0
+          pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
 
       - name: HL-SMI
         run: |
@@ -301,7 +307,7 @@ jobs:
 
       - name: Run all deepspeed tests on intel Gaudi
         run: |
-          python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_torch_cuda_extensions_gpu_test_reports tests/deepspeed -m "not not_device_test"
+          configure-ci-otel --job-name run_torch_cuda_extensions_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_torch_cuda_extensions_gpu_test_reports tests/deepspeed -m "not not_device_test"
 
       - name: Failure short reports
         if: ${{ failure() }}
