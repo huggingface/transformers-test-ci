@@ -46,6 +46,9 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: huggingface/transformers-quality
+    env:
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
     outputs:
       # Expose which jobs have a non-empty test list (mirrors the
       # `os.path.isfile(f"{job_name}_test_list.txt")` gate in create_circleci_config)
@@ -75,12 +78,17 @@ jobs:
       - name: Debug
         run: |
           uv pip install -U -e .
+          uv pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
           echo $(pwd)
           ls -la
           # We need this, otherwise `tests_fetcher.py` below will fail with `SHA could not be resolved, git returned: b''` when access ``repo.head.commit`.
           # (even git log -n X will fail without this command)
           git config --global --add safe.directory '*'
           git log -n 5
+
+      - name: Ping OTEL collector
+        run: |
+          configure-ci-otel --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
 
       # tests_fetcher.py computes which tests to run by diffing the current
       # branch against main, so main must exist locally as a git ref.
