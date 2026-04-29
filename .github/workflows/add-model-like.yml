@@ -18,6 +18,9 @@ jobs:
     env:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
       OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      TRANSFORMERSCI_OTEL_DEBUG: "1"
+      TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
+      TRANSFORMERS_TEST_OTEL_SUITE: tests_new_models
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 

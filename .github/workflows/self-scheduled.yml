@@ -64,6 +64,8 @@ env:
   # Self-hosted OTLP collector wiring. If the secrets are unset, configure-ci-otel is a no-op.
   OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
   OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+  TRANSFORMERSCI_OTEL_DEBUG: "1"
+  TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
 
 jobs:
   setup:

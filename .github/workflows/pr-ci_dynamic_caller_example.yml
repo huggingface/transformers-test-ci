@@ -56,6 +56,8 @@ jobs:
     env:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
       OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      TRANSFORMERSCI_OTEL_DEBUG: "1"
+      TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
     outputs:
       # Expose which jobs have a non-empty test list (mirrors the
       # `os.path.isfile(f"{job_name}_test_list.txt")` gate in create_circleci_config)
