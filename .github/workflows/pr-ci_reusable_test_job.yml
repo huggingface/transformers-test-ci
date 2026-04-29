@@ -595,7 +595,7 @@ jobs:
 
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
-          eval "$TIMEOUT_CMD configure-ci-otel --job-name $JOB_NAME -- python3 -m pytest \
+          eval "$TIMEOUT_CMD configure-ci-otel --suite $JOB_NAME -- python3 -m pytest \
             $MARKER_CMD \
             -n $PYTEST_NUM_WORKERS \
             $JUNIT_FLAGS \

@@ -102,7 +102,7 @@ jobs:
           echo "machine_type=$machine_type" >> $GITHUB_ENV
 
       - name: Run all tests on Gaudi
-        run: configure-ci-otel --job-name "${{ inputs.report_name_prefix }}_${matrix_folders}" -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_${{ inputs.report_name_prefix }}_${{ matrix.folders }}_test_reports tests/${{ matrix.folders }}
+        run: configure-ci-otel --suite "${{ inputs.report_name_prefix }}_${matrix_folders}" -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_${{ inputs.report_name_prefix }}_${{ matrix.folders }}_test_reports tests/${{ matrix.folders }}
 
       - name: Failure short reports
         if: ${{ failure() }}

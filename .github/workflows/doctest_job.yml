@@ -74,7 +74,7 @@ jobs:
         working-directory: /transformers
         run: |
           cat doc_tests.txt
-          configure-ci-otel --job-name doc_tests_gpu_${{ env.split_keys }} -- python3 -m pytest -v --make-reports doc_tests_gpu_${{ env.split_keys }} --doctest-modules $(cat doc_tests.txt) -sv --doctest-continue-on-failure --doctest-glob="*.md"
+          configure-ci-otel --suite doc_tests_gpu_${{ env.split_keys }} -- python3 -m pytest -v --make-reports doc_tests_gpu_${{ env.split_keys }} --doctest-modules $(cat doc_tests.txt) -sv --doctest-continue-on-failure --doctest-glob="*.md"
 
       - name: Failure short reports
         if: ${{ failure() }}

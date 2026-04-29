@@ -69,7 +69,7 @@ jobs:
       - name: Run all PyTorch modeling test
         run: |
           . ~/venv/bin/activate
-          configure-ci-otel --job-name tests_new_models -- python -m pytest -n 2 --dist=loadfile -s --make-reports=tests_new_models tests/bert_new/test_modeling_bert_new.py
+          configure-ci-otel --suite tests_new_models -- python -m pytest -n 2 --dist=loadfile -s --make-reports=tests_new_models tests/bert_new/test_modeling_bert_new.py
 
       - name: Run style changes
         run: |

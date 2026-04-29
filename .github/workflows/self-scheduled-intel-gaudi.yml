@@ -161,7 +161,7 @@ jobs:
 
       - name: Run all pipeline tests on Intel Gaudi
         run: |
-          configure-ci-otel --job-name run_pipelines_torch_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_pipelines_torch_gpu_test_reports tests/pipelines -m "not not_device_test"
+          configure-ci-otel --suite run_pipelines_torch_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_pipelines_torch_gpu_test_reports tests/pipelines -m "not not_device_test"
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -234,7 +234,7 @@ jobs:
       - name: Run examples tests on Intel Gaudi
         run: |
           pip install -r examples/pytorch/_tests_requirements.txt
-          configure-ci-otel --job-name run_examples_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_examples_gpu_test_reports examples/pytorch -m "not not_device_test"
+          configure-ci-otel --suite run_examples_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_examples_gpu_test_reports examples/pytorch -m "not not_device_test"
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -307,7 +307,7 @@ jobs:
 
       - name: Run all deepspeed tests on intel Gaudi
         run: |
-          configure-ci-otel --job-name run_torch_cuda_extensions_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_torch_cuda_extensions_gpu_test_reports tests/deepspeed -m "not not_device_test"
+          configure-ci-otel --suite run_torch_cuda_extensions_gpu -- python3 -m pytest -v --make-reports=${{ env.machine_type }}_run_torch_cuda_extensions_gpu_test_reports tests/deepspeed -m "not not_device_test"
 
       - name: Failure short reports
         if: ${{ failure() }}
