@@ -15,13 +15,6 @@ jobs:
   run_tests_templates_like:
     name: "Add new model like template tests"
     runs-on: ubuntu-22.04
-    env:
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-      OTEL_SERVICE_NAME: pytest-observability-demo
-      TRANSFORMERSCI_OTEL_DEBUG: "1"
-      TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
-      TRANSFORMERS_TEST_OTEL_SUITE: tests_new_models
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
@@ -58,11 +51,6 @@ jobs:
               exit 1
           fi
 
-      - name: Install transformers-ci for OTEL integration
-        run: |
-          . ~/venv/bin/activate
-          pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
-
       - name: Create model files
         run: |
           . ~/venv/bin/activate
@@ -73,7 +61,7 @@ jobs:
       - name: Run all PyTorch modeling test
         run: |
           . ~/venv/bin/activate
-          configure-ci-otel --suite tests_new_models -- python -m pytest -n 2 --dist=loadfile -s --make-reports=tests_new_models tests/bert_new/test_modeling_bert_new.py
+          python -m pytest -n 2 --dist=loadfile -s --make-reports=tests_new_models tests/bert_new/test_modeling_bert_new.py
 
       - name: Run style changes
         run: |

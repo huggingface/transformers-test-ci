@@ -61,12 +61,6 @@ env:
   HF_TOKEN: ${{ secrets.HF_HUB_READ_TOKEN }}
   TF_FORCE_GPU_ALLOW_GROWTH: true
   CUDA_VISIBLE_DEVICES: 0,1
-  # Self-hosted OTLP collector wiring. If the secrets are unset, configure-ci-otel is a no-op.
-  OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-  OTEL_SERVICE_NAME: pytest-observability-demo
-  TRANSFORMERSCI_OTEL_DEBUG: "1"
-  TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
 
 jobs:
   setup:
@@ -201,10 +195,6 @@ jobs:
         working-directory: /transformers
         run: python3 -m pip uninstall -y transformers && python3 -m pip install -e .
 
-      - name: Install transformers-ci for OTEL integration
-        working-directory: /transformers
-        run: python3 -m pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
-
       - name: NVIDIA-SMI
         run: |
           nvidia-smi
@@ -240,7 +230,7 @@ jobs:
       - name: Run all pipeline tests on GPU
         working-directory: /transformers
         run: |
-          configure-ci-otel --suite run_pipelines_torch_gpu -- python3 -m pytest -n 1 -v --dist=loadfile --make-reports="${machine_type}_run_pipelines_torch_gpu_test_reports" tests/pipelines
+          python3 -m pytest -n 1 -v --dist=loadfile --make-reports="${machine_type}_run_pipelines_torch_gpu_test_reports" tests/pipelines
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -276,10 +266,6 @@ jobs:
       - name: Reinstall transformers in edit mode (remove the one installed during docker image build)
         working-directory: /transformers
         run: python3 -m pip uninstall -y transformers && python3 -m pip install -e .
-
-      - name: Install transformers-ci for OTEL integration
-        working-directory: /transformers
-        run: python3 -m pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
 
       - name: NVIDIA-SMI
         run: |
@@ -317,7 +303,7 @@ jobs:
         working-directory: /transformers
         run: |
           pip install -r examples/pytorch/_tests_requirements.txt
-          configure-ci-otel --suite run_examples_gpu -- python3 -m pytest -v --make-reports="${machine_type}_run_examples_gpu_test_reports" examples/pytorch
+          python3 -m pytest -v --make-reports="${machine_type}_run_examples_gpu_test_reports" examples/pytorch
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -353,10 +339,6 @@ jobs:
       - name: Reinstall transformers in edit mode (remove the one installed during docker image build)
         working-directory: ${{ inputs.working-directory-prefix }}/transformers
         run: python3 -m pip uninstall -y transformers && python3 -m pip install -e .
-
-      - name: Install transformers-ci for OTEL integration
-        working-directory: ${{ inputs.working-directory-prefix }}/transformers
-        run: python3 -m pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
 
       - name: Update / Install some packages (for Past CI)
         if: ${{ contains(inputs.docker, '-past-') && contains(inputs.docker, '-pytorch-') }}
@@ -421,7 +403,7 @@ jobs:
       - name: Run all tests on GPU
         working-directory: ${{ inputs.working-directory-prefix }}/transformers
         run: |
-          script -q -c "configure-ci-otel --suite run_torch_cuda_extensions_gpu -- python3 -m pytest -v -rsfE --make-reports=${machine_type}_run_torch_cuda_extensions_gpu_test_reports tests/trainer/distributed/test_trainer_distributed_deepspeed.py" test_outputs.txt
+          script -q -c "python3 -m pytest -v -rsfE --make-reports=${machine_type}_run_torch_cuda_extensions_gpu_test_reports tests/trainer/distributed/test_trainer_distributed_deepspeed.py" test_outputs.txt
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -473,10 +455,6 @@ jobs:
         working-directory: /transformers
         run: python3 -m pip uninstall -y transformers && python3 -m pip install -e .
 
-      - name: Install transformers-ci for OTEL integration
-        working-directory: /transformers
-        run: python3 -m pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
-
       - name: NVIDIA-SMI
         run: |
           nvidia-smi
@@ -514,7 +492,7 @@ jobs:
         env:
           folders: ${{ matrix.folders }}
         run: |
-          configure-ci-otel --suite run_quantization_torch_gpu_${matrix_folders} -- python3 -m pytest -v --make-reports="${machine_type}_run_quantization_torch_gpu_${matrix_folders}_test_reports" tests/${folders}
+          python3 -m pytest -v --make-reports="${machine_type}_run_quantization_torch_gpu_${matrix_folders}_test_reports" tests/${folders}
 
       - name: Failure short reports
         if: ${{ failure() }}
@@ -554,10 +532,6 @@ jobs:
       - name: Install kernels
         working-directory: /transformers
         run: python3 -m pip install -U kernels
-
-      - name: Install transformers-ci for OTEL integration
-        working-directory: /transformers
-        run: python3 -m pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
   
       - name: NVIDIA-SMI
         run: nvidia-smi
@@ -592,7 +566,7 @@ jobs:
       - name: Run kernel tests on GPU
         working-directory: /transformers
         run: |
-          configure-ci-otel --suite run_kernels_gpu -- python3 -m pytest -v --make-reports="${machine_type}_run_kernels_gpu_test_reports" tests/kernels/test_kernels.py
+          python3 -m pytest -v --make-reports="${machine_type}_run_kernels_gpu_test_reports" tests/kernels/test_kernels.py
 
       - name: Failure short reports
         if: ${{ failure() }}
