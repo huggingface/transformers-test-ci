@@ -21,17 +21,6 @@
 name: CI — Dynamic Test Suite
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: "0 2 * * *"   # nightly
-  workflow_dispatch:
-    inputs:
-      nightly:
-        description: "Run as nightly (enables flaky tests)"
-        type: boolean
-        default: false
   workflow_call:
     secrets:
       OTEL_EXPORTER_OTLP_ENDPOINT:
