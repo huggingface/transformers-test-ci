@@ -24,7 +24,6 @@ logger = logging.get_logger(__name__)
 
 VOCAB_FILES_NAMES = {"vocab_file": "vocab.json", "merges_file": "merges.txt", "tokenizer_file": "tokenizer.json"}
 
-b = 4
 
 class CLIPTokenizer(TokenizersBackend):
     """
