@@ -133,6 +133,9 @@ jobs:
           python utils/tests_fetcher.py | tee tests_fetched_summary.txt || true
           python utils/tests_fetcher.py --filter_tests || true
 
+      - name: Force tests_torch list (debug)
+        run: echo "tests/models/bert/test_modeling_bert.py" > test_preparation/tests_torch_test_list.txt
+
       - name: Check which jobs have tests to run
         id: check
         run: |
