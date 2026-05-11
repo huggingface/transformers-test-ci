@@ -397,11 +397,6 @@ jobs:
           else
             echo "OTEL_EXPORTER_OTLP_ENDPOINT is not set"
           fi
-          if [ -n "$OTEL_SERVICE_NAME" ]; then
-            echo "OTEL_SERVICE_NAME is set"
-          else
-            echo "OTEL_SERVICE_NAME is not set"
-          fi
           if [ -n "$OTEL_TOKEN" ]; then
             echo "OTEL_TOKEN is set"
           else
