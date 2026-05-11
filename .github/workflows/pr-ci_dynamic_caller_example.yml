@@ -25,7 +25,7 @@ on:
     secrets:
       OTEL_EXPORTER_OTLP_ENDPOINT:
         required: false
-      OTEL_EXPORTER_OTLP_HEADERS:
+      OTEL_TOKEN:
         required: false
 
 jobs:
@@ -44,8 +44,7 @@ jobs:
       image: huggingface/transformers-quality
     env:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-      OTEL_SERVICE_NAME: pytest-observability-demo
+      OTEL_TOKEN: ${{ secrets.OTEL_TOKEN }}
       TRANSFORMERSCI_OTEL_DEBUG: "1"
       TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
     outputs:
@@ -87,7 +86,11 @@ jobs:
 
       - name: Ping OTEL collector
         run: |
-          configure-ci-otel --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
+          configure-ci-otel \
+            --protocol http \
+            --serice-name "pytest-observability" \
+            --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
 
       # tests_fetcher.py computes which tests to run by diffing the current
       # branch against main, so main must exist locally as a git ref.
