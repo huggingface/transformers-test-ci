@@ -21,13 +21,9 @@
 name: CI — Dynamic Test Suite
 
 on:
-  pull_request:
-  workflow_dispatch:
   workflow_call:
     secrets:
       OTEL_EXPORTER_OTLP_ENDPOINT:
-        required: false
-      OTEL_SERVICE_NAME:
         required: false
       OTEL_TOKEN:
         required: false
@@ -48,7 +44,6 @@ jobs:
       image: huggingface/transformers-quality
     env:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_SERVICE_NAME: ${{ secrets.OTEL_SERVICE_NAME }}
       OTEL_TOKEN: ${{ secrets.OTEL_TOKEN }}
       TRANSFORMERSCI_OTEL_DEBUG: "1"
       TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
@@ -93,6 +88,7 @@ jobs:
         run: |
           configure-ci-otel \
             --protocol http \
+            --serice-name "pytest-observability" \
             --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
             --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
 
@@ -134,9 +130,6 @@ jobs:
           mkdir -p test_preparation
           python utils/tests_fetcher.py | tee tests_fetched_summary.txt || true
           python utils/tests_fetcher.py --filter_tests || true
-
-      - name: Force tests_torch list (debug)
-        run: echo "tests/models/bert/test_modeling_bert.py" > test_preparation/tests_torch_test_list.txt
 
       - name: Check which jobs have tests to run
         id: check

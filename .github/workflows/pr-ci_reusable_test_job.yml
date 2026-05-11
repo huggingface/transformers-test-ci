@@ -371,7 +371,6 @@ jobs:
       SKIP_CUDA_DOCTEST: ${{ inputs.skip_cuda_doctest && '1' || '0' }}
       # Self-hosted OTLP collector wiring. If the secrets are unset, configure-ci-otel is a no-op.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_SERVICE_NAME: ${{ secrets.OTEL_SERVICE_NAME }}
       OTEL_TOKEN: ${{ secrets.OTEL_TOKEN }}
       TRANSFORMERSCI_OTEL_DEBUG: "1"
       TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
@@ -621,11 +620,12 @@ jobs:
           set -o pipefail
           configure-ci-otel \
             --protocol http \
+            --service-name "pytest-observability" \
             --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
             --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
           eval "$TIMEOUT_CMD configure-ci-otel \
             --suite $JOB_NAME \
-            --service-name \"$OTEL_SERVICE_NAME\" \
+            --service-name "pytest-observability" \
             --protocol http \
             --otlp-endpoint \"$OTEL_EXPORTER_OTLP_ENDPOINT\" \
             --token \"$OTEL_TOKEN\" \
