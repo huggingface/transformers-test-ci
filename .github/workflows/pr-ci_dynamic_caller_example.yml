@@ -88,7 +88,7 @@ jobs:
         run: |
           configure-ci-otel \
             --protocol http \
-            --serice-name "pytest-observability" \
+            --service-name "pytest-observability" \
             --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
             --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
 
