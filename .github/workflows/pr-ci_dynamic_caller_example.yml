@@ -21,6 +21,7 @@
 name: CI — Dynamic Test Suite
 
 on:
+  workflow_dispatch:
   workflow_call:
     secrets:
       OTEL_EXPORTER_OTLP_ENDPOINT:
