@@ -27,6 +27,7 @@ on:
         required: false
       OTEL_TOKEN:
         required: false
+  pull_request:
 
 jobs:
   # ===========================================================================

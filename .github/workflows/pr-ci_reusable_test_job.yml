@@ -545,6 +545,28 @@ jobs:
           cp -r /test_data/* . 2>/dev/null || true
           python3 utils/fetch_hub_objects_for_ci.py
 
+      - name: Debug disk space
+        run: |
+          # Overall disk usage summary
+          df -h
+      
+          # Show the top 20 largest directories under /home/runner
+          du -h /home/runner --max-depth=3 2>/dev/null | sort -rh | head -20
+      
+          # Check /tmp as well (sometimes overlooked)
+          du -sh /tmp 2>/dev/null
+      
+          # Show total size of the HF cache tar.gz before extraction
+          ls -lh huggingface-cache.tar.gz
+      
+          # Check what's inside the archive without extracting
+          tar -tzf huggingface-cache.tar.gz | wc -l   # number of entries
+          tar -tzf huggingface-cache.tar.gz | head -20 # peek at contents
+      
+          # Inode usage (sometimes it's inodes, not bytes)
+          df -i
+
+
       # ── 13. Download and extract hub cache ────────────────────────────────────
       # Maps: "download and unzip hub cache" step.
       # Uses pigz for parallel decompression (already installed in step 3).
