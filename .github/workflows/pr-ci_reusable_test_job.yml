@@ -408,6 +408,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # actions/checkout leaves the workspace owned by the runner UID, but this
+      # job runs as root inside a container. Without this, any git call from
+      # within the container (e.g. the pytest-opentelemetry plugin probing the
+      # repo for VCS metadata) fails with "fatal: detected dubious ownership".
+      - name: Fix git safe directory
+        run: git config --global --add safe.directory '*'
+
       # ── 2. Download test preparation artifacts ───────────────────────────────
       # Maps: attach_workspace (at "test_preparation").
       # Downloads the single test-preparation artifact uploaded by the caller,
