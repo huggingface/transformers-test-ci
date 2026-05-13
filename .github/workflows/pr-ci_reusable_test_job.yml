@@ -676,7 +676,7 @@ jobs:
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
           eval "$TIMEOUT_CMD \
-            -- python3 -m pytest \
+            python3 -m pytest \
             $MARKER_CMD \
             -n $PYTEST_NUM_WORKERS \
             $JUNIT_FLAGS \
