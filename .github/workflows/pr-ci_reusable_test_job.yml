@@ -537,17 +537,21 @@ jobs:
 
       - name: Debug disk space
         run: |
+          echo "========== df -h =========="
           # Overall disk usage summary
           df -h
-      
-          # Show the top 20 largest directories under /home/runner
-          du -h /home/runner --max-depth=3 2>/dev/null | sort -rh | head -20
-      
-          # Check /tmp as well (sometimes overlooked)
-          du -sh /tmp 2>/dev/null
-            
+
+          echo "========== df -i =========="
           # Inode usage (sometimes it's inodes, not bytes)
           df -i
+
+          echo "========== du /home/runner (top 20) =========="
+          # Show the top 20 largest directories under /home/runner
+          du -h /home/runner --max-depth=3 2>/dev/null | sort -rh | head -20
+
+          echo "========== du /tmp =========="
+          # Check /tmp as well (sometimes overlooked)
+          du -sh /tmp 2>/dev/null
 
 
       # ── 13. Download and extract hub cache ────────────────────────────────────
@@ -564,24 +568,36 @@ jobs:
 
       - name: Debug disk space
         run: |
+          echo "========== df -h =========="
           # Overall disk usage summary
           df -h
-      
-          # Show the top 20 largest directories under /home/runner
-          du -h /home/runner --max-depth=3 2>/dev/null | sort -rh | head -20
-      
-          # Check /tmp as well (sometimes overlooked)
-          du -sh /tmp 2>/dev/null
-      
-          # Show total size of the HF cache tar.gz before extraction
-          ls -lh huggingface-cache.tar.gz
-      
-          # Check what's inside the archive without extracting
-          tar -tzf huggingface-cache.tar.gz | wc -l   # number of entries
-          tar -tzf huggingface-cache.tar.gz | head -20 # peek at contents
-      
+
+          echo "========== df -i =========="
           # Inode usage (sometimes it's inodes, not bytes)
           df -i
+
+          echo "========== du /home/runner (top 20) =========="
+          # Show the top 20 largest directories under /home/runner
+          du -h /home/runner --max-depth=3 2>/dev/null | sort -rh | head -20
+
+          echo "========== du /tmp =========="
+          # Check /tmp as well (sometimes overlooked)
+          du -sh /tmp 2>/dev/null
+
+          echo "========== tar.gz file size =========="
+          # Show total size of the HF cache tar.gz
+          ls -lh huggingface-cache.tar.gz
+
+          echo "========== tar entry count =========="
+          # Check what's inside the archive without extracting
+          tar -tzf huggingface-cache.tar.gz | wc -l   # number of entries
+
+          echo "========== tar first 20 entries =========="
+          tar -tzf huggingface-cache.tar.gz | head -20 # peek at contents
+
+          echo "========== top 20 largest dirs in hub/ =========="
+          # Show the top 20 largest directories under hub/
+          du -h hub/ --max-depth=2 2>/dev/null | sort -rh | head -20
 
       # ── 14. Run tests ──────────────────────────────────────────────────────────
       # Maps: the "Run tests" step in to_dict().
