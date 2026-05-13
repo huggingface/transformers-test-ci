@@ -665,17 +665,7 @@ jobs:
 
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
-          configure-ci-otel \
-            --protocol http \
-            --service-name "pytest-observability" \
-            --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
-            --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
-          eval "$TIMEOUT_CMD configure-ci-otel \
-            --suite $JOB_NAME \
-            --service-name "pytest-observability" \
-            --protocol http \
-            --otlp-endpoint \"$OTEL_EXPORTER_OTLP_ENDPOINT\" \
-            --token \"$OTEL_TOKEN\" \
+          eval "$TIMEOUT_CMD \
             -- python3 -m pytest \
             $MARKER_CMD \
             -n $PYTEST_NUM_WORKERS \
