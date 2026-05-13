@@ -390,7 +390,7 @@ jobs:
           echo "TRANSFORMERS_VERBOSITY=$TRANSFORMERS_VERBOSITY"
           echo "DATASETS_VERBOSITY=$DATASETS_VERBOSITY"
           echo "SKIP_CUDA_DOCTEST=$SKIP_CUDA_DOCTEST"
-          fi
+
 
       # ── 1. Checkout ─────────────────────────────────────────────────────────
       # Maps: "checkout" step in CircleCI.
