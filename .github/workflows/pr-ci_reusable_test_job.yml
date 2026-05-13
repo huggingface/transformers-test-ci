@@ -370,11 +370,6 @@ jobs:
       DATASETS_VERBOSITY: ${{ inputs.datasets_verbosity }}
       SKIP_CUDA_DOCTEST: ${{ inputs.skip_cuda_doctest && '1' || '0' }}
       # Self-hosted OTLP collector wiring. If the secrets are unset, configure-ci-otel is a no-op.
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_TOKEN: ${{ secrets.OTEL_TOKEN }}
-      TRANSFORMERSCI_OTEL_DEBUG: "1"
-      TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
-      TRANSFORMERS_TEST_OTEL_SUITE: ${{ inputs.job_name }}
 
       # Use the shared cache (read-only) from our infra
       HF_HOME: /mnt/cache
@@ -395,15 +390,6 @@ jobs:
           echo "TRANSFORMERS_VERBOSITY=$TRANSFORMERS_VERBOSITY"
           echo "DATASETS_VERBOSITY=$DATASETS_VERBOSITY"
           echo "SKIP_CUDA_DOCTEST=$SKIP_CUDA_DOCTEST"
-          if [ -n "$OTEL_EXPORTER_OTLP_ENDPOINT" ]; then
-            echo "OTEL_EXPORTER_OTLP_ENDPOINT is set"
-          else
-            echo "OTEL_EXPORTER_OTLP_ENDPOINT is not set"
-          fi
-          if [ -n "$OTEL_TOKEN" ]; then
-            echo "OTEL_TOKEN is set"
-          else
-            echo "OTEL_TOKEN is not set"
           fi
 
       # ── 1. Checkout ─────────────────────────────────────────────────────────
@@ -446,7 +432,6 @@ jobs:
           eval "$INSTALL_STEPS"
           uv pip install git+https://github.com/ydshieh/pytest.git@8.4.1-ydshieh
           uv pip install pytest-random-order
-          uv pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
         env:
           INSTALL_STEPS: ${{ inputs.install_steps }}
 
