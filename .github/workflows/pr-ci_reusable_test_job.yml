@@ -379,6 +379,7 @@ jobs:
       - name: Check HF_HOME
         run: |
           echo $HF_HOME
+          find / -type d -path "*/.cache/huggingface" 2>/dev/null
           ls -la ~/.cache
           ls -la /mnt/cache
 
