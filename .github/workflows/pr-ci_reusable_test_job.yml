@@ -371,7 +371,15 @@ jobs:
       SKIP_CUDA_DOCTEST: ${{ inputs.skip_cuda_doctest && '1' || '0' }}
       # Self-hosted OTLP collector wiring. If the secrets are unset, configure-ci-otel is a no-op.
 
+      HF_HOME: /mnt/cache
+
     steps:
+
+      # ── 0. Debug — print job-level env vars ─────────────────────────────────
+      - name: Check HF_HOME
+        run: |
+          echo $HF_HOME
+          ls -la /mnt/cache
 
       # ── 0. Debug — print job-level env vars ─────────────────────────────────
       - name: Print environment variables
