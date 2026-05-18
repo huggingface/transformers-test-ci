@@ -375,17 +375,20 @@ jobs:
 
     steps:
 
+#      - name: Check HF_HOME
+#        run: |
+#          echo $HF_HOME
+#          find / -type d -path "*/.cache/huggingface" 2>/dev/null
+#          ls -la /root/.cache/huggingface
+#          echo "bonbon"
+#          ls -la /mnt/cache/
+
       # ── 0. Debug — print job-level env vars ─────────────────────────────────
       - name: Check HF_HOME
         run: |
           echo $HF_HOME
-          find / -type d -path "*/.cache/huggingface" 2>/dev/null
-          ls -la /root/.cache/huggingface
-          echo "bonbon"
           ls -la /mnt/cache/
-
-
-
+          ls -la /mnt/cache/hub/hf-internal-testing--tiny-random-bert
 
       # ── 0. Debug — print job-level env vars ─────────────────────────────────
       - name: Print environment variables
