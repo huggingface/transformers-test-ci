@@ -380,6 +380,7 @@ jobs:
         run: |
           echo $HF_HOME
           find / -type d -path "*/.cache/huggingface" 2>/dev/null
+          la -la /root/.cache/huggingface
           ls -la ~/.cache
           ls -la /mnt/cache
 
