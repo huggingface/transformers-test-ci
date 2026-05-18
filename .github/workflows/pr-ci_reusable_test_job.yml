@@ -338,7 +338,7 @@ jobs:
     # --shm-size needed for PyTorch multiprocessing workers.
     container:
       image: ${{ needs.setup.outputs.effective_image }}
-      options: "--shm-size=16gb"
+      options: "--shm-size=16gb -v /mnt/cache/.cache/huggingface:/mnt/cache/"
 
     # ── Shard matrix ──────────────────────────────────────────────────────────
     strategy:
@@ -380,9 +380,12 @@ jobs:
         run: |
           echo $HF_HOME
           find / -type d -path "*/.cache/huggingface" 2>/dev/null
-          la -la /root/.cache/huggingface
-          ls -la ~/.cache
-          ls -la /mnt/cache
+          ls -la /root/.cache/huggingface
+          echo "bonbon"
+          ls -la /mnt/cache/
+
+
+
 
       # ── 0. Debug — print job-level env vars ─────────────────────────────────
       - name: Print environment variables
