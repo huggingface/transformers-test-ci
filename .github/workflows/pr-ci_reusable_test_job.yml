@@ -379,6 +379,7 @@ jobs:
       - name: Check HF_HOME
         run: |
           echo $HF_HOME
+          la -la ~/.cache
           ls -la /mnt/cache
 
       # ── 0. Debug — print job-level env vars ─────────────────────────────────
