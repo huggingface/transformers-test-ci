@@ -389,6 +389,8 @@ jobs:
           echo $HF_HOME
           ls -la /mnt/cache/
           ls -la /mnt/cache/hub/hf-internal-testing--tiny-random-bert
+          ls -la /mnt/cache/hub/
+          ls -la /mnt/cache/hub/models--hf-internal-testing--namespace-mistralai-repo_name-Mistral-Small-3.1-24B-Instruct-2503
 
       # ── 0. Debug — print job-level env vars ─────────────────────────────────
       - name: Print environment variables

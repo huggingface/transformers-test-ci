@@ -1507,6 +1507,9 @@ class MistralCommonBackend(PreTrainedTokenizerBase):
 
         mode = cls._get_validation_mode(mode)
 
+        print("check read-only")
+        print(pretrained_model_name_or_path)
+
         if not os.path.isdir(pretrained_model_name_or_path):
             tokenizer_path = download_tokenizer_from_hf_hub(
                 repo_id=pretrained_model_name_or_path,
