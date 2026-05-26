@@ -338,7 +338,7 @@ jobs:
     # --shm-size needed for PyTorch multiprocessing workers.
     container:
       image: ${{ needs.setup.outputs.effective_image }}
-      options: "--shm-size=16gb"
+      options: "--shm-size=16gb -v /mnt/cache/.cache/huggingface:/mnt/cache/"
 
     # ── Shard matrix ──────────────────────────────────────────────────────────
     strategy:
@@ -375,6 +375,9 @@ jobs:
       TRANSFORMERSCI_OTEL_DEBUG: "1"
       TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
       TRANSFORMERS_TEST_OTEL_SUITE: ${{ inputs.job_name }}
+
+      # Use the shared cache (read-only) from our infra
+      HF_HOME: /mnt/cache
 
     steps:
 
