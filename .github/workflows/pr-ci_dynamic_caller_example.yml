@@ -23,7 +23,7 @@ name: CI — Dynamic Test Suite
 on:
   push:
     branches:
-      - main
+      - enable_push_event
   workflow_call:
     secrets:
       OTEL_EXPORTER_OTLP_ENDPOINT:
