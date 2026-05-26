@@ -38,7 +38,7 @@ jobs:
   test-preparation:
     name: "Test preparation (fetcher)"
     runs-on:
-      group: aws-m8i-2xl-cache2
+      group: aws-m8i-2xl-cache
 
     container:
       image: huggingface/transformers-quality
