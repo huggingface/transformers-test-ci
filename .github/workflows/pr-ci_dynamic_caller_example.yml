@@ -98,7 +98,8 @@ jobs:
       # tests_fetcher.py computes which tests to run by diffing the current
       # branch against main, so main must exist locally as a git ref.
       - name: Fetch main branch ref
-        run: git fetch origin main
+        if: github.ref != 'refs/heads/main'
+        run: git fetch origin main:main
 
 #      # TODO: A better way to handle (some) python scripts
 #      # Discard the entire local utils/ first so that any file a contributor may
@@ -243,7 +244,8 @@ jobs:
       # check_modular_conversion.py calls `git merge-base main HEAD`, which requires
       # the main ref to exist locally — same reason test-preparation fetches it.
       - name: Fetch main branch ref
-        run: git fetch origin main
+        if: github.ref != 'refs/heads/main'
+        run: git fetch origin main:main
 
 #      # TODO: A better way to handle (some) python scripts
 #      # Discard the entire local utils/ first so that any file a contributor may
