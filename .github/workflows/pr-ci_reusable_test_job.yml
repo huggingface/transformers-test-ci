@@ -542,6 +542,7 @@ jobs:
       - name: Fetch hub objects for CI
         if: "!inputs.skip_hub_cache"
         run: |
+          pip install -U git+https://github.com/huggingface/huggingface_hub.git@skip_if_there
           cp -r /test_data/* . 2>/dev/null || true
           python3 utils/fetch_hub_objects_for_ci.py
 
