@@ -38,6 +38,8 @@ on:
         required: false
       OTEL_EXPORTER_OTLP_HEADERS:
         required: false
+      HF_TOKEN:
+        required: false
 
     # =========================================================================
     # INPUTS
@@ -380,6 +382,7 @@ jobs:
       HF_HOME: /mnt/cache
       HF_DATASETS_CACHE: /tmp/hf_datasets_cache
       HF_MODULES_CACHE: /tmp/hf_modules_cache
+      HF_TOKEN_SECRET: ${{ secrets.HF_TOKEN }}
 
     steps:
 
@@ -619,9 +622,8 @@ jobs:
           fi
 
           # ── HF_TOKEN ─────────────────────────────────────────────────────────
-          # not critical — assembled from parts to avoid storing plaintext,
-          # mirroring the "".join([...]) approach in create_circleci_config.py.
-          export HF_TOKEN=$(printf '%s' h f _ q h b O C G N Y x D K C P J n q m O q g q s f q S v f s j q w j C T)
+          # Token should be stored as a repository secret and passed via secrets context
+          export HF_TOKEN="$HF_TOKEN_SECRET"
 
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
