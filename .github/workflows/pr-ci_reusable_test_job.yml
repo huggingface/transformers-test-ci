@@ -620,9 +620,7 @@ jobs:
           fi
 
           # ── HF_TOKEN ─────────────────────────────────────────────────────────
-          # not critical — assembled from parts to avoid storing plaintext,
-          # mirroring the "".join([...]) approach in create_circleci_config.py.
-          export HF_TOKEN=$(printf '%s' h f _ q h b O C G N Y x D K C P J n q m O q g q s f q S v f s j q w j C T)
+          # We no longer need the token anymore after the migration - as we have shared cache.
 
           # ── Execute ──────────────────────────────────────────────────────────
           set -o pipefail
