@@ -378,6 +378,8 @@ jobs:
 
       # Use the shared cache (read-only) from our infra
       HF_HOME: /mnt/cache
+      HF_DATASETS_CACHE: /tmp/hf_datasets_cache
+      HF_MODULES_CACHE: /tmp/hf_modules_cache
 
     steps:
 
