@@ -414,6 +414,9 @@ jobs:
       # Maps: "checkout" step in CircleCI.
       - name: Checkout repository
         uses: actions/checkout@v4
+        # TODO: This is slow, but there is a test that needs more git commits. Try to find a better approach.
+        with:
+          fetch-depth: 0
 
       # actions/checkout leaves the workspace owned by the runner UID, but this
       # job runs as root inside a container. Without this, any git call from
