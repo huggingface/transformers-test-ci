@@ -312,7 +312,7 @@ jobs:
     with:
       job_name:          "tests_torch"
       docker_image:      "huggingface/transformers-torch-light"
-      parallelism:       6
+      parallelism:       8
       marker:            "not generate"
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
     secrets: inherit
@@ -326,7 +326,7 @@ jobs:
     with:
       job_name:          "tests_generate"
       docker_image:      "huggingface/transformers-torch-light"
-      parallelism:       6
+      parallelism:       8
       marker:            "generate"
       install_steps:     "uv pip install ."
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
@@ -367,7 +367,7 @@ jobs:
       job_name:            "pipelines_torch"
       report_name:         "tests_pipelines_torch"
       docker_image:        "huggingface/transformers-torch-light"
-      parallelism:         4
+      parallelism:         8
       marker:              "is_pipeline_test"
       run_pipeline_tests:  true
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
@@ -408,7 +408,7 @@ jobs:
     with:
       job_name:              "tests_exotic_models"
       docker_image:          "huggingface/transformers-exotic-models"
-      parallelism:           4
+      parallelism:           8
       pytest_extra_options:  "--durations=100"
       use_dev_image:         ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
     secrets: inherit
@@ -434,7 +434,7 @@ jobs:
     with:
       job_name:          "tests_non_model"
       docker_image:      "huggingface/transformers-torch-light"
-      parallelism:       6
+      parallelism:       8
       install_steps:     "uv pip install .[serving]"
       marker:            "not generate"
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
@@ -448,7 +448,7 @@ jobs:
     with:
       job_name:            "tests_training_ci"
       docker_image:        "huggingface/transformers-torch-light"
-      parallelism:         6
+      parallelism:         8
       install_steps:       "uv pip install ."
       marker:              "is_training_test"
       run_training_tests:  true
