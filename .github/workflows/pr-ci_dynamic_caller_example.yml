@@ -124,9 +124,9 @@ jobs:
           MSG=$(git show -s --format=%s)
           echo "Commit message subject: $MSG"
           if echo "$MSG" | grep -qF "[build-ci-image]" || [ "$MSG" = "dev-ci" ]; then
-            echo "use_dev_image=true" >> $GITHUB_OUTPUT
+            echo "use_dev_image=true" >> "$GITHUB_OUTPUT"
           else
-            echo "use_dev_image=false" >> $GITHUB_OUTPUT
+            echo "use_dev_image=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run tests fetcher
