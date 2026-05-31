@@ -64,7 +64,7 @@ jobs:
       run_tests_repo_utils:      ${{ steps.check.outputs.run_tests_repo_utils }}
       run_tests_non_model:       ${{ steps.check.outputs.run_tests_non_model }}
       run_tests_training_ci:     ${{ steps.check.outputs.run_tests_training_ci }}
-      run_tests_tensor_parallel_ci:     ${{ steps.check.outputs.tests_tensor_parallel_ci }}
+      run_tests_tensor_parallel_ci:     ${{ steps.check.outputs.run_tests_tensor_parallel_ci }}
       # Mirrors CircleCIJob.__post_init__: appends ':dev' when the commit
       # message contains "[build-ci-image]" or equals "dev-ci".
       use_dev_image:             ${{ steps.dev_image.outputs.use_dev_image }}
@@ -142,7 +142,7 @@ jobs:
           for job in tests_torch tests_generate tests_tokenization tests_processors \
                      pipelines_torch tests_custom_tokenizers examples_torch \
                      tests_exotic_models tests_repo_utils tests_non_model \
-                     tests_training_ci; do
+                     tests_training_ci tests_tensor_parallel_ci; do
             FILE="test_preparation/${job}_test_list.txt"
             if [ -f "$FILE" ] && [ -s "$FILE" ]; then
               echo "run_${job}=true" >> $GITHUB_OUTPUT
