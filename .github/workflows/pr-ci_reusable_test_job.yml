@@ -649,7 +649,7 @@ jobs:
             --token \"$OTEL_TOKEN\" \
             -- python3 -m pytest \
             $MARKER_CMD \
-            -n $PYTEST_NUM_WORKERS \
+            -n 1 \
             $JUNIT_FLAGS \
             $RERUN_FLAGS \
             $COMMON_FLAGS \
