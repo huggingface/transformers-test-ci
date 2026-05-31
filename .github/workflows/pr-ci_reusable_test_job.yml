@@ -182,6 +182,13 @@ on:
         type: boolean
         default: false
 
+      # tensor_parallel_ci_job: additional_env={"RUN_TENSOR_PARALLEL_TESTS": True}
+      run_tensor_parallel_tests:
+        description: "Set RUN_TENSOR_PARALLEL_TESTS=true. Used by tensor_parallel_ci job."
+        required: false
+        type: boolean
+        default: false
+
       # examples_torch_job: additional_env={"OMP_NUM_THREADS": 8}
       # Overrides the COMMON_ENV_VARIABLES default of 1.
       omp_num_threads:
@@ -364,6 +371,7 @@ jobs:
       # --- additional_env fields (per-job knobs) ---
       RUN_CUSTOM_TOKENIZERS: ${{ inputs.run_custom_tokenizers }}
       RUN_TRAINING_TESTS: ${{ inputs.run_training_tests }}
+      RUN_TENSOR_PARALLEL_TESTS: ${{ inputs.run_tensor_parallel_tests }}
 
       # Conditionally set verbosity overrides (empty string = not set)
       TRANSFORMERS_VERBOSITY: ${{ inputs.transformers_verbosity }}

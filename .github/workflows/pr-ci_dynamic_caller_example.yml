@@ -64,6 +64,7 @@ jobs:
       run_tests_repo_utils:      ${{ steps.check.outputs.run_tests_repo_utils }}
       run_tests_non_model:       ${{ steps.check.outputs.run_tests_non_model }}
       run_tests_training_ci:     ${{ steps.check.outputs.run_tests_training_ci }}
+      run_tests_tensor_parallel_ci:     ${{ steps.check.outputs.tests_tensor_parallel_ci }}
       # Mirrors CircleCIJob.__post_init__: appends ':dev' when the commit
       # message contains "[build-ci-image]" or equals "dev-ci".
       use_dev_image:             ${{ steps.dev_image.outputs.use_dev_image }}
@@ -155,7 +156,7 @@ jobs:
           for job in tests_torch tests_generate tests_tokenization tests_processors \
                      pipelines_torch tests_custom_tokenizers examples_torch \
                      tests_exotic_models tests_repo_utils tests_non_model \
-                     tests_training_ci; do
+                     tests_training_ci tests_tensor_parallel_ci; do
             FILE="test_preparation/${job}_test_list.txt"
             if [ -f "$FILE" ]; then
               echo "$FILE: $(grep -c '' "$FILE") lines"
@@ -455,6 +456,21 @@ jobs:
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
     secrets: inherit
 
+  # Origin: tensor_parallel_ci_job in .circleci/create_circleci_config.py
+  tests_tensor_parallel_ci:
+    needs: test-preparation
+    if: needs.test-preparation.outputs.run_tests_tensor_parallel_ci == 'true'
+    uses: ./.github/workflows/pr-ci_reusable_test_job.yml
+    with:
+      job_name:            "tests_tensor_parallel_ci"
+      docker_image:        "huggingface/transformers-torch-light"
+      parallelism:         8
+      install_steps:       "uv pip install . && uv pip install torchao"
+      marker:              "is_tensor_parallel_test"
+      run_tensor_parallel_tests:  true
+      use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
+    secrets: inherit
+
   # ---------------------------------------------------------------------------
   # ===========================================================================
   # Stage 3 — Collection (equivalent of EmptyJob with job_name="collection_job")
@@ -477,6 +493,7 @@ jobs:
       - tests_repo_utils
       - tests_non_model
       - tests_training_ci
+      - tests_tensor_parallel_ci
     if: always()
     steps:
       - uses: actions/checkout@v4
