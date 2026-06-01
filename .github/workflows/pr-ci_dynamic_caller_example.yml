@@ -466,7 +466,7 @@ jobs:
       docker_image:        "huggingface/transformers-torch-light"
       parallelism:         8
       pytest_num_workers:  1
-      install_steps:       "uv pip install . && uv pip install torchao && sleep 15m"
+      install_steps:       "uv pip install . && uv pip install torchao"
       marker:              "is_tensor_parallel_test"
       run_tensor_parallel_tests:  true
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
