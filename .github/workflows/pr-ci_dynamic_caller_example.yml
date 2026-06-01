@@ -120,13 +120,15 @@ jobs:
       # consumed by each per-job `uses:` block as the `use_dev_image` input.
       - name: Detect dev image flag from commit message
         id: dev_image
+        env:
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          MSG=$(git show -s --format=%s)
+          MSG=$(git show -s --format=%s "$COMMIT_SHA")
           echo "Commit message subject: $MSG"
           if echo "$MSG" | grep -qF "[build-ci-image]" || [ "$MSG" = "dev-ci" ]; then
-            echo "use_dev_image=true" >> $GITHUB_OUTPUT
+            echo "use_dev_image=true" >> "$GITHUB_OUTPUT"
           else
-            echo "use_dev_image=false" >> $GITHUB_OUTPUT
+            echo "use_dev_image=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run tests fetcher
