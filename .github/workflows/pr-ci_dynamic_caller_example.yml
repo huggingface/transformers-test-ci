@@ -426,7 +426,6 @@ jobs:
       docker_image:       "huggingface/transformers-consistency"
       pytest_num_workers: 4
       use_dev_image:      ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
-      skip_hub_cache:     true
     secrets: inherit
 
   # Origin: non_model_job in .circleci/create_circleci_config.py

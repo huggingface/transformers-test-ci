@@ -233,16 +233,6 @@ on:
         type: boolean
         default: false
 
-      skip_hub_cache:
-        description: >
-          Skip the hub object prefetch and hub cache download steps.
-          Set to true for jobs that don't need pretrained model weights
-          (e.g. tests_repo_utils which uses the consistency image).
-        required: false
-        type: boolean
-        default: false
-
-
 # =============================================================================
 # JOBS
 # =============================================================================
@@ -550,27 +540,6 @@ jobs:
           TEST_LIST: test_preparation/${{ inputs.job_name }}_test_list.txt
           TOTAL_SHARDS: ${{ needs.setup.outputs.shard_count }}
           SHARD_IDX: ${{ matrix.shard_index }}
-
-      # ── 12. Pre-fetch hub objects ─────────────────────────────────────────────
-      # Maps: "fetch hub objects before pytest" step.
-      # /test_data/ may be pre-populated in the Docker image during its build.
-      - name: Fetch hub objects for CI
-        if: "!inputs.skip_hub_cache"
-        run: |
-          cp -r /test_data/* . 2>/dev/null || true
-          python3 utils/fetch_hub_objects_for_ci.py
-
-      # ── 13. Download and extract hub cache ────────────────────────────────────
-      # Maps: "download and unzip hub cache" step.
-      # Uses pigz for parallel decompression (already installed in step 3).
-      - name: Download and extract HuggingFace hub cache
-        if: "!inputs.skip_hub_cache"
-        run: |
-          curl -L -o huggingface-cache.tar.gz \
-            https://huggingface.co/datasets/hf-internal-testing/hf_hub_cache/resolve/main/huggingface-cache.tar.gz
-          tar --use-compress-program="pigz -d -p 8" -xf huggingface-cache.tar.gz
-          mv -n hub/* /root/.cache/huggingface/hub/ 2>/dev/null || true
-          ls -la /root/.cache/huggingface/hub/
 
       # ── 14. Run tests ──────────────────────────────────────────────────────────
       # Maps: the "Run tests" step in to_dict().
