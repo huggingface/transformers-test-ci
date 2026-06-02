@@ -25,11 +25,6 @@ on:
     branches:
       - main
   workflow_call:
-    secrets:
-      OTEL_EXPORTER_OTLP_ENDPOINT:
-        required: false
-      OTEL_TOKEN:
-        required: false
 
 jobs:
   # ===========================================================================
@@ -46,8 +41,6 @@ jobs:
     container:
       image: huggingface/transformers-quality
     env:
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_TOKEN: ${{ secrets.OTEL_TOKEN }}
       TRANSFORMERSCI_OTEL_DEBUG: "1"
       TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
     outputs:
