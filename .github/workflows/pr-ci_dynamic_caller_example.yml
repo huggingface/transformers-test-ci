@@ -459,7 +459,7 @@ jobs:
       job_name:            "tests_tensor_parallel_ci"
       docker_image:        "huggingface/transformers-torch-light"
       parallelism:         8
-      pytest_num_workers:  1
+      pytest_num_workers:  8
       install_steps:       "uv pip install . && uv pip install torchao"
       marker:              "is_tensor_parallel_test"
       run_tensor_parallel_tests:  true
