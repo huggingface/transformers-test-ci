@@ -217,6 +217,7 @@ jobs:
       - name: Check code quality
         run: make check-code-quality
 
+
   check_repository_consistency:
     name: "Check repository consistency"
     runs-on: ubuntu-22.04
@@ -302,7 +303,7 @@ jobs:
 
   # Origin: torch_job in .circleci/create_circleci_config.py
   tests_torch:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_torch == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -316,7 +317,7 @@ jobs:
 
   # Origin: generate_job in .circleci/create_circleci_config.py
   tests_generate:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_generate == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -330,7 +331,7 @@ jobs:
 
   # Origin: tokenization_job in .circleci/create_circleci_config.py
   tests_tokenization:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_tokenization == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -342,7 +343,7 @@ jobs:
 
   # Origin: processor_job in .circleci/create_circleci_config.py
   tests_processors:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_processors == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -356,7 +357,7 @@ jobs:
   # NOTE: job_name has no "tests_" prefix; report_name must be set explicitly
   #       → "tests_pipelines_torch" (mirrors --make-reports=tests_{self.name}).
   pipelines_torch:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_pipelines_torch == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -371,7 +372,7 @@ jobs:
 
   # Origin: custom_tokenizers_job in .circleci/create_circleci_config.py
   tests_custom_tokenizers:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_custom_tokenizers == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -384,7 +385,7 @@ jobs:
   # Origin: examples_torch_job in .circleci/create_circleci_config.py
   # NOTE: job_name has no "tests_" prefix ("examples" in name).
   examples_torch:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_examples_torch == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -398,7 +399,7 @@ jobs:
 
   # Origin: exotic_models_job in .circleci/create_circleci_config.py
   tests_exotic_models:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_exotic_models == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -411,7 +412,7 @@ jobs:
 
   # Origin: repo_utils_job in .circleci/create_circleci_config.py
   tests_repo_utils:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_repo_utils == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -423,7 +424,7 @@ jobs:
 
   # Origin: non_model_job in .circleci/create_circleci_config.py
   tests_non_model:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_non_model == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -437,7 +438,7 @@ jobs:
 
   # Origin: training_ci_job in .circleci/create_circleci_config.py
   tests_training_ci:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_training_ci == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -452,7 +453,7 @@ jobs:
 
   # Origin: tensor_parallel_ci_job in .circleci/create_circleci_config.py
   tests_tensor_parallel_ci:
-    needs: test-preparation
+    needs: [test-preparation, check_code_quality]
     if: needs.test-preparation.outputs.run_tests_tensor_parallel_ci == 'true'
     uses: ./.github/workflows/pr-ci_reusable_test_job.yml
     with:
@@ -520,3 +521,4 @@ jobs:
           name: aggregated-test-results
           path: outputs/
           retention-days: 30
+
