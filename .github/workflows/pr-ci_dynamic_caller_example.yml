@@ -274,26 +274,32 @@ jobs:
       - name: Check repository consistency
         run: make check-repository-consistency
 
-      - name: "Test import with all backends (torch + PIL + torchvision)"
-        run: python -c "from transformers import *" || (echo 'import failed with all backends. Fix unprotected imports!!'; exit 1)
-
-      - name: "Test import with torch only (no PIL, no torchvision)"
+      - name: "Test imports with various backend combinations (parallel)"
         run: |
-          uv pip uninstall Pillow torchvision -q
-          python -c "from transformers import *" || (echo 'import failed with torch only (no PIL). Fix unprotected imports!!'; exit 1)
-          uv pip install -e ".[quality]" -q
+          # Create 4 isolated venvs and install quality deps in parallel
+          (uv venv .venv_all   -q && uv pip install -p .venv_all/bin/python   -e ".[quality]" -q) &
+          (uv venv .venv_torch -q && uv pip install -p .venv_torch/bin/python -e ".[quality]" -q) &
+          (uv venv .venv_pil   -q && uv pip install -p .venv_pil/bin/python   -e ".[quality]" -q) &
+          (uv venv .venv_tv    -q && uv pip install -p .venv_tv/bin/python    -e ".[quality]" -q) &
+          wait
 
-      - name: "Test import with PIL only (no torch, no torchvision)"
-        run: |
-          uv pip uninstall torch torchvision torchaudio -q
-          python -c "from transformers import *" || (echo 'import failed with PIL only (no torch). Fix unprotected imports!!'; exit 1)
-          uv pip install -e ".[quality]" -q
+          # Adjust each env to match the desired backend combination
+          uv pip uninstall -p .venv_torch/bin/python Pillow torchvision -q
+          uv pip uninstall -p .venv_pil/bin/python   torch torchvision torchaudio -q
+          uv pip uninstall -p .venv_tv/bin/python    torchvision -q
 
-      - name: "Test import with torch + PIL, no torchvision"
-        run: |
-          uv pip uninstall torchvision -q
-          python -c "from transformers import *" || (echo 'import failed with torch+PIL but no torchvision. Fix unprotected imports!!'; exit 1)
-          uv pip install -e ".[quality]" -q
+          # Run all 4 import tests in parallel, capturing output
+          .venv_all/bin/python   -c "from transformers import *" >/tmp/out_all   2>&1 & PID_ALL=$!
+          .venv_torch/bin/python -c "from transformers import *" >/tmp/out_torch 2>&1 & PID_TORCH=$!
+          .venv_pil/bin/python   -c "from transformers import *" >/tmp/out_pil   2>&1 & PID_PIL=$!
+          .venv_tv/bin/python    -c "from transformers import *" >/tmp/out_tv    2>&1 & PID_TV=$!
+
+          FAILED=0
+          wait $PID_ALL   || { cat /tmp/out_all;   echo "import failed with all backends. Fix unprotected imports!!";                FAILED=1; }
+          wait $PID_TORCH || { cat /tmp/out_torch; echo "import failed with torch only (no PIL). Fix unprotected imports!!";         FAILED=1; }
+          wait $PID_PIL   || { cat /tmp/out_pil;   echo "import failed with PIL only (no torch). Fix unprotected imports!!";         FAILED=1; }
+          wait $PID_TV    || { cat /tmp/out_tv;    echo "import failed with torch+PIL but no torchvision. Fix unprotected imports!!"; FAILED=1; }
+          [ $FAILED -eq 0 ] || exit 1
 
   # ===========================================================================
   # Stage 2 — Test jobs
