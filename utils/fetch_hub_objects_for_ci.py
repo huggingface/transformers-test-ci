@@ -255,52 +255,6 @@ if __name__ == "__main__":
             repo_id="nielsr/audio-spectogram-transformer-checkpoint", filename="sample_audio.flac", repo_type="dataset"
         )
 
-    # Need to specify the username on the endpoint `hub-ci`, otherwise we get
-    # `fatal: could not read Username for 'https://hub-ci.huggingface.co': Success`
-    # But this repo. is never used in a test decorated by `is_staging_test`.
-    if not _run_staging:
-        if not os.path.isdir("tiny-random-custom-architecture"):
-            snapshot_download(
-                "hf-internal-testing/tiny-random-custom-architecture",
-                local_dir="tiny-random-custom-architecture",
-            )
-
-        # For `tests/test_tokenization_mistral_common.py:TestMistralCommonBackend`, which eventually calls
-        # `mistral_common.tokens.tokenizers.utils.download_tokenizer_from_hf_hub` which (probably) doesn't have the cache.
-        # For `revision=None`, see https://github.com/huggingface/transformers/pull/40623
-        if is_mistral_common_available():
-            from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
-            from mistral_common.tokens.tokenizers.utils import list_local_hf_repo_files
-
-            from transformers import AutoTokenizer
-            from transformers.tokenization_mistral_common import MistralCommonBackend
-
-            repo_id = "hf-internal-testing/namespace-mistralai-repo_name-Mistral-Small-3.1-24B-Instruct-2503"
-
-            # determine if we already have this downloaded
-            local_files_only = len(list_local_hf_repo_files(repo_id, revision=None)) > 0
-
-            # This will go the path `transformers/tokenization_mistral_common.py::MistralCommonBackend::from_pretrained --> mistral_common.tokens.tokenizers.utils.download_tokenizer_from_hf_hub`.
-            # No idea at all why we need the statement below again (`MistralCommonBackend.from_pretrained`).
-            AutoTokenizer.from_pretrained(
-                repo_id, tokenizer_type="mistral", local_files_only=local_files_only, revision=None
-            )
-
-            _ = MistralCommonBackend.from_pretrained(
-                repo_id,
-                local_files_only=local_files_only,
-                # This is a hack as `list_local_hf_repo_files` from `mistral_common` has a bug
-                # TODO: Discuss with `mistral-common` maintainers: after a fix being done there, remove this `revision` hack
-                revision=None,
-            )
-
-            MistralTokenizer.from_hf_hub(repo_id, local_files_only=local_files_only)
-
-            repo_id = "mistralai/Voxtral-Mini-3B-2507"
-            local_files_only = len(list_local_hf_repo_files(repo_id, revision=None)) > 0
-
-            AutoTokenizer.from_pretrained(repo_id, local_files_only=local_files_only, revision=None)
-            MistralTokenizer.from_hf_hub(repo_id, local_files_only=local_files_only)
 
     # Download files from URLs to local directory
     for url in URLS_FOR_TESTING_DATA:
