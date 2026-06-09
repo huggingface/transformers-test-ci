@@ -399,6 +399,8 @@ jobs:
           else
             echo "OTEL_TOKEN is not set"
           fi
+          # Staging mirror is hardcoded to the staging box (10.90.52.50:5317,
+          # grpc, unauthenticated ingest) in the test run step below.
 
       # ── 1. Checkout ─────────────────────────────────────────────────────────
       # Maps: "checkout" step in CircleCI.
@@ -601,6 +603,8 @@ jobs:
             --protocol http \
             --service-name "pytest-observability" \
             --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
             --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
           eval "$TIMEOUT_CMD configure-ci-otel \
             --suite $JOB_NAME \
@@ -608,6 +612,8 @@ jobs:
             --protocol http \
             --otlp-endpoint \"$OTEL_EXPORTER_OTLP_ENDPOINT\" \
             --token \"$OTEL_TOKEN\" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
             -- python3 -m pytest \
             $MARKER_CMD \
             -n $PYTEST_NUM_WORKERS \

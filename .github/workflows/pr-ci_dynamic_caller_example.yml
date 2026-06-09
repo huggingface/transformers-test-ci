@@ -87,6 +87,8 @@ jobs:
             --protocol http \
             --service-name "pytest-observability" \
             --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
             --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
 
       # tests_fetcher.py computes which tests to run by diffing the current
