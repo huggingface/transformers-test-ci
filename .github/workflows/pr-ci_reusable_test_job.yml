@@ -228,6 +228,15 @@ on:
         type: boolean
         default: false
 
+      skip_hub_cache:
+        description: >
+          Skip the hub object prefetch and hub cache download steps.
+          Set to true for jobs that don't need pretrained model weights
+          (e.g. tests_repo_utils which uses the consistency image).
+        required: false
+        type: boolean
+        default: false
+
 # =============================================================================
 # JOBS
 # =============================================================================
@@ -539,6 +548,7 @@ jobs:
       # Maps: "fetch hub objects before pytest" step.
       # /test_data/ may be pre-populated in the Docker image during its build.
       - name: Fetch hub objects for CI
+        if: "!inputs.skip_hub_cache"
         run: |
           curl -sSL -o utils/fetch_hub_objects_for_ci.py \
             https://raw.githubusercontent.com/huggingface/transformers-test-ci/main/utils/fetch_hub_objects_for_ci.py
