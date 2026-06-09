@@ -235,7 +235,7 @@ on:
           (e.g. tests_repo_utils which uses the consistency image).
         required: false
         type: boolean
-        default: false
+        default: true
 
 # =============================================================================
 # JOBS
