@@ -13,9 +13,9 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
-          # Use the API with --paginate to handle large PRs and exclude deleted files
-          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
-            --jq '.[] | select(.status != "removed") | .filename' > /tmp/changed_files.txt
+          # Save full API response (includes patches) and extract non-deleted filenames
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" | jq -s 'add' > /tmp/pr_files.json
+          jq -r '.[] | select(.status != "removed") | .filename' /tmp/pr_files.json > /tmp/changed_files.txt
           echo "Changed files:"
           cat /tmp/changed_files.txt
           grep '\.py$' /tmp/changed_files.txt > /tmp/py_files.txt || true
@@ -47,19 +47,64 @@ jobs:
         if: steps.py-check.outputs.has_py == 'true'
         run: |
           pip install bandit --quiet
-          # Run full report in JSON, capturing all severity levels; || true so we can inspect output even on findings
           xargs bandit --format json -l -o /tmp/bandit_report.json < /tmp/py_files.txt || true
-          # Catch all shell/process execution issues regardless of severity level:
-          # B601: paramiko (SSH)  B602: subprocess(shell=True)  B603: subprocess without shell
+
+      - name: Check for new shell execution issues
+        if: steps.py-check.outputs.has_py == 'true'
+        run: |
+          python3 - <<'EOF'
+          import json, re, sys
+
+          with open('/tmp/bandit_report.json') as f:
+              report = json.load(f)
+          with open('/tmp/pr_files.json') as f:
+              pr_files = json.load(f)
+
+          # B601: paramiko  B602: subprocess(shell=True)  B603: subprocess without shell
           # B604: any call with shell=True  B605: os.system/os.popen  B606: process without shell
           # B607: partial path process  B609: wildcard injection
-          issues=$(jq '[.results[] | select(.test_id | test("^B60[1-79]$"))] | length' /tmp/bandit_report.json)
-          if [ "$issues" -gt 0 ]; then
-            echo "::error::Bandit found $issues shell/process execution issue(s):"
-            jq -r '.results[] | select(.test_id | test("^B60[1-79]$")) | "\(.filename):\(.line_number) [\(.test_id)] \(.issue_text)"' /tmp/bandit_report.json
-            exit 1
-          fi
-          echo "No shell execution issues found"
+          SHELL_TESTS = re.compile(r'^B60[1-79]$')
+
+          shell_findings = [r for r in report.get('results', []) if SHELL_TESTS.match(r['test_id'])]
+          if not shell_findings:
+              print("No shell execution issues found")
+              sys.exit(0)
+
+          def added_lines(patch):
+              """Return set of line numbers (in the new file) that were added by the PR."""
+              added = set()
+              current_line = 0
+              for line in (patch or '').split('\n'):
+                  if line.startswith('@@'):
+                      m = re.search(r'\+(\d+)(?:,\d+)?', line)
+                      if m:
+                          current_line = int(m.group(1))
+                  elif line.startswith('+') and not line.startswith('+++'):
+                      added.add(current_line)
+                      current_line += 1
+                  elif not line.startswith('-'):
+                      current_line += 1
+              return added
+
+          patch_map = {f['filename']: f.get('patch') for f in pr_files}
+
+          new_issues = []
+          for finding in shell_findings:
+              patch = patch_map.get(finding['filename'])
+              if patch is None:
+                  # Patch truncated (large file) — treat conservatively as new issue
+                  new_issues.append(finding)
+              elif finding['line_number'] in added_lines(patch):
+                  new_issues.append(finding)
+
+          if new_issues:
+              print(f"::error::Found {len(new_issues)} shell/process issue(s) introduced by this PR:")
+              for i in new_issues:
+                  print(f"  {i['filename']}:{i['line_number']} [{i['test_id']}] {i['issue_text']}")
+              sys.exit(1)
+
+          print(f"Shell issues found in {len(shell_findings)} location(s) but all pre-existing — OK")
+          EOF
 
   approve-pr-ci:
     needs: security-check
