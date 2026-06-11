@@ -13,7 +13,9 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
-          gh pr diff "$PR_NUMBER" --name-only --repo "$REPO" > /tmp/changed_files.txt
+          # Use the API with --paginate to handle large PRs and exclude deleted files
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[] | select(.status != "removed") | .filename' > /tmp/changed_files.txt
           echo "Changed files:"
           cat /tmp/changed_files.txt
           grep '\.py$' /tmp/changed_files.txt > /tmp/py_files.txt || true
