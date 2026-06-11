@@ -49,7 +49,7 @@ jobs:
           pip install bandit --quiet
           xargs bandit --format json -l -o /tmp/bandit_report.json < /tmp/py_files.txt || true
 
-      - name: Check for new shell execution issues
+      - name: Check for new high severity issues
         if: steps.py-check.outputs.has_py == 'true'
         run: |
           python3 - <<'EOF'
@@ -60,14 +60,14 @@ jobs:
           with open('/tmp/pr_files.json') as f:
               pr_files = json.load(f)
 
-          # B601: paramiko  B602: subprocess(shell=True)  B603: subprocess without shell
-          # B604: any call with shell=True  B605: os.system/os.popen  B606: process without shell
-          # B607: partial path process  B609: wildcard injection
           SHELL_TESTS = re.compile(r'^B60[1-79]$')
 
-          shell_findings = [r for r in report.get('results', []) if SHELL_TESTS.match(r['test_id'])]
-          if not shell_findings:
-              print("No shell execution issues found")
+          findings = [
+              r for r in report.get('results', [])
+              if r['issue_severity'] == 'HIGH' or SHELL_TESTS.match(r['test_id'])
+          ]
+          if not findings:
+              print("No issues found")
               sys.exit(0)
 
           def added_lines(patch):
@@ -89,7 +89,7 @@ jobs:
           patch_map = {f['filename']: f.get('patch') for f in pr_files}
 
           new_issues = []
-          for finding in shell_findings:
+          for finding in findings:
               # Bandit reports './path/to/file.py', API returns 'path/to/file.py'
               filename = finding['filename'].lstrip('./')
               patch = patch_map.get(filename)
@@ -100,12 +100,12 @@ jobs:
                   new_issues.append(finding)
 
           if new_issues:
-              print(f"::error::Found {len(new_issues)} shell/process issue(s) introduced by this PR:")
+              print(f"::error::Found {len(new_issues)} issue(s) introduced by this PR:")
               for i in new_issues:
-                  print(f"  {i['filename']}:{i['line_number']} [{i['test_id']}] {i['issue_text']}")
+                  print(f"  {i['filename']}:{i['line_number']} [{i['test_id']}] [{i['issue_severity']}] {i['issue_text']}")
               sys.exit(1)
 
-          print(f"Shell issues found in {len(shell_findings)} location(s) but all pre-existing — OK")
+          print(f"Issues found in {len(findings)} location(s) but all pre-existing — OK")
           EOF
 
   approve-pr-ci:
