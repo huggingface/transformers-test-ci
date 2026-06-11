@@ -90,7 +90,9 @@ jobs:
 
           new_issues = []
           for finding in shell_findings:
-              patch = patch_map.get(finding['filename'])
+              # Bandit reports './path/to/file.py', API returns 'path/to/file.py'
+              filename = finding['filename'].lstrip('./')
+              patch = patch_map.get(filename)
               if patch is None:
                   # Patch truncated (large file) — treat conservatively as new issue
                   new_issues.append(finding)
