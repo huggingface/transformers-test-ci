@@ -3,6 +3,10 @@ name: PR CI Security Gate
 on:
   workflow_call:
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   security-check:
     runs-on: ubuntu-22.04
@@ -47,16 +51,26 @@ jobs:
         if: steps.py-check.outputs.has_py == 'true'
         run: |
           pip install bandit --quiet
-          xargs bandit --format json -l -o /tmp/bandit_report.json < /tmp/py_files.txt || true
+          # -d '\n': split on newlines only (handles filenames with spaces)
+          # --: end of options, prevents filenames starting with '-' being treated as flags
+          xargs -d '\n' bandit --format json -l -o /tmp/bandit_report.json -- < /tmp/py_files.txt || true
 
       - name: Check for new high severity issues
         if: steps.py-check.outputs.has_py == 'true'
         run: |
           python3 - <<'EOF'
-          import json, re, sys
+          import json, os, re, sys
+
+          if not os.path.exists('/tmp/bandit_report.json'):
+              print("::error::Bandit report not found — Bandit may have crashed before writing output")
+              sys.exit(1)
 
           with open('/tmp/bandit_report.json') as f:
-              report = json.load(f)
+              try:
+                  report = json.load(f)
+              except json.JSONDecodeError as e:
+                  print(f"::error::Failed to parse Bandit report: {e}")
+                  sys.exit(1)
           with open('/tmp/pr_files.json') as f:
               pr_files = json.load(f)
 
