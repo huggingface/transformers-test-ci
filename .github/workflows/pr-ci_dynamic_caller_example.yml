@@ -186,6 +186,10 @@ jobs:
     env:
       TRANSFORMERS_IS_CI: "true"
       PYTEST_TIMEOUT: 120
+      TRANSFORMERSCI_OTEL_DEBUG: "1"
+      TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
+      # Job grouping for the dashboards (the YAML job key, e.g. check_code_quality).
+      TRANSFORMERS_TEST_OTEL_SUITE: ${{ github.job }}
     steps:
       - uses: actions/checkout@v4
 
@@ -206,6 +210,9 @@ jobs:
       - name: Install quality dependencies
         run: uv pip install -e ".[quality]"
 
+      - name: Install observability wrapper
+        run: uv pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
+
       - name: Show installed libraries and their versions
         run: pip freeze | tee installed.txt
 
@@ -216,8 +223,21 @@ jobs:
           path: installed.txt
           retention-days: 3
 
+      # configure-ci-otel sets up OTEL env + a TRACEPARENT, then runs the command.
+      # checkers.py (invoked by make) self-instruments via transformersci.otel.instrument,
+      # emitting one span per checker grouped under --suite. No --export-traces here
+      # (that flag is pytest-only); the spans come from the in-process tracer.
       - name: Check code quality
-        run: make check-code-quality
+        run: |
+          configure-ci-otel \
+            --suite ${{ github.job }} \
+            --service-name "pytest-observability" \
+            --protocol http \
+            --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --token "$OTEL_TOKEN" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
+            -- make check-code-quality
 
 
   check_repository_consistency:
@@ -228,6 +248,10 @@ jobs:
     env:
       TRANSFORMERS_IS_CI: "true"
       PYTEST_TIMEOUT: 120
+      TRANSFORMERSCI_OTEL_DEBUG: "1"
+      TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
+      # Job grouping for the dashboards (the YAML job key, e.g. check_repository_consistency).
+      TRANSFORMERS_TEST_OTEL_SUITE: ${{ github.job }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -263,6 +287,9 @@ jobs:
       - name: Install quality dependencies
         run: uv pip install -e ".[quality]"
 
+      - name: Install observability wrapper
+        run: uv pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
+
       - name: Show installed libraries and their versions
         run: pip freeze | tee installed.txt
 
@@ -273,8 +300,19 @@ jobs:
           path: installed.txt
           retention-days: 3
 
+      # See check_code_quality: checkers.py self-instruments; spans are grouped
+      # under --suite and land on the same dashboards as the pytest jobs.
       - name: Check repository consistency
-        run: make check-repository-consistency
+        run: |
+          configure-ci-otel \
+            --suite ${{ github.job }} \
+            --service-name "pytest-observability" \
+            --protocol http \
+            --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --token "$OTEL_TOKEN" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
+            -- make check-repository-consistency
 
       - name: "Test import with all backends (torch + PIL + torchvision)"
         run: python -c "from transformers import *" || (echo 'import failed with all backends. Fix unprotected imports!!'; exit 1)
