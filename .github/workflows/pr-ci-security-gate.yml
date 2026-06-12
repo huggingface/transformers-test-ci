@@ -53,7 +53,7 @@ jobs:
           pip install bandit --quiet
           # -d '\n': split on newlines only (handles filenames with spaces)
           # --: end of options, prevents filenames starting with '-' being treated as flags
-          xargs -d '\n' bandit --format json -l -o /tmp/bandit_report.json -- < /tmp/py_files.txt || true
+          xargs -d '\n' bandit --format json -l --ignore-nosec -o /tmp/bandit_report.json -- < /tmp/py_files.txt || true
 
       - name: Check for new high severity issues
         if: steps.py-check.outputs.has_py == 'true'
