@@ -563,3 +563,84 @@ jobs:
           path: outputs/
           retention-days: 30
 
+  # ===========================================================================
+  # Stage 4 — Sentinel (single required check for branch protection)
+  #
+  # This is the ONLY job you need to add to your branch protection rules:
+  #   "pr-ci / PR CI status"
+  #
+  # Why a separate job instead of reusing `collection`:
+  #   - `collection` always succeeds (it just aggregates artefacts).
+  #   - This job explicitly fails when any upstream job failed or was cancelled,
+  #     and passes when all jobs either succeeded or were intentionally skipped
+  #     (skipped = the test-list was empty for that job, which is expected and OK).
+  #
+  # Coverage:
+  #   - test-preparation, check_code_quality, check_repository_consistency  (Stage 1)
+  #   - all 12 conditional test jobs                                         (Stage 2)
+  #   - collection                                                            (Stage 3)
+  # ===========================================================================
+  ci_passed:
+    name: "PR CI status"
+    runs-on: ubuntu-22.04
+    needs:
+      # Stage 1
+      - test-preparation
+      - check_code_quality
+      - check_repository_consistency
+      # Stage 2 — test jobs (may be skipped when test list is empty; that is OK)
+      - tests_torch
+      - tests_generate
+      - tests_tokenization
+      - tests_processors
+      - pipelines_torch
+      - tests_custom_tokenizers
+      - examples_torch
+      - tests_exotic_models
+      - tests_repo_utils
+      - tests_non_model
+      - tests_training_ci
+      - tests_tensor_parallel_ci
+      # Stage 3
+      - collection
+    # Run even when upstream jobs fail so the check is always reported to GitHub.
+    # Without `if: always()` this job would be skipped on upstream failure, and
+    # GitHub treats a missing/skipped required check as "passing" — defeating the
+    # whole purpose.
+    if: always()
+    steps:
+      - name: Decide pass or fail
+        env:
+          # Pass the expression result through an env var instead of interpolating
+          # it directly into the shell script, which would be a script-injection risk.
+          # Acceptable values: success, skipped.
+          # Unacceptable values: failure, cancelled.
+          # Collects each job's result into one space-separated string, e.g. "success skipped failure success".
+          NEEDS_RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Upstream job results: $NEEDS_RESULTS"
+
+          failed=false
+          # Unquoted — intentional: bash splits on spaces, iterating one result word at a time.
+          for result in $NEEDS_RESULTS; do
+            case "$result" in
+              success|skipped)
+                # Both are fine — skipped means the test list was empty for that job.
+                ;;
+              failure|cancelled)
+                echo "  ✗ at least one job reported: $result"
+                failed=true
+                ;;
+              *)
+                echo "  ? unexpected result value: $result"
+                failed=true
+                ;;
+            esac
+          done
+
+          if [[ "$failed" == "true" ]]; then
+            echo "CI failed — see the jobs above for details."
+            exit 1
+          fi
+
+          echo "All jobs passed or were intentionally skipped. CI is green."
