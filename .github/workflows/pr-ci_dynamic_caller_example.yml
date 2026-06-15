@@ -68,7 +68,11 @@ jobs:
           # TODO: Check if CircleCI is doing the same.
           fetch-depth: 0
 
-
+      - name: Resolve PR number for merge_group events
+        if: github.event_name == 'merge_group'
+        run: |
+          PR_NUM=$(echo "$GITHUB_REF" | grep -oP '(?<=pr-)\d+' || echo "")
+          echo "TRANSFORMERS_TEST_OTEL_PR=$PR_NUM" >> "$GITHUB_ENV"
 
       - name: Debug
         run: |
@@ -193,6 +197,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve PR number for merge_group events
+        if: github.event_name == 'merge_group'
+        run: |
+          PR_NUM=$(echo "$GITHUB_REF" | grep -oP '(?<=pr-)\d+' || echo "")
+          echo "TRANSFORMERS_TEST_OTEL_PR=$PR_NUM" >> "$GITHUB_ENV"
+
       - name: Fix git safe directory
         run: git config --global --add safe.directory '*'
 
@@ -258,6 +268,12 @@ jobs:
           # check_modular_conversion.py calls `git merge-base main HEAD`,
           # which needs full history to find a common ancestor.
           fetch-depth: 0
+
+      - name: Resolve PR number for merge_group events
+        if: github.event_name == 'merge_group'
+        run: |
+          PR_NUM=$(echo "$GITHUB_REF" | grep -oP '(?<=pr-)\d+' || echo "")
+          echo "TRANSFORMERS_TEST_OTEL_PR=$PR_NUM" >> "$GITHUB_ENV"
 
       # Same fix as test-preparation: git tools called by check_modular_conversion.py
       # fail with "dubious ownership" when the workspace dir is owned by a different UID.
