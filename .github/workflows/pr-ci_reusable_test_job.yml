@@ -391,7 +391,9 @@ jobs:
       - name: Resolve PR number for merge_group events
         if: github.event_name == 'merge_group'
         run: |
+          echo "Branch: $GITHUB_REF"
           PR_NUM=$(echo "$GITHUB_REF" | grep -oP '(?<=pr-)\d+' || echo "")
+          echo "Extracted PR number: $PR_NUM"
           echo "TRANSFORMERS_TEST_OTEL_PR=$PR_NUM" >> "$GITHUB_ENV"
           echo "RUN_FLAKY=false" >> "$GITHUB_ENV"
 
