@@ -6,6 +6,9 @@ name: Integration-failure triage (daily Serge auto-fix)
 on:
   schedule:
     - cron: "0 0 * * *"
+  push:
+    branches:
+      - tarek-nightly-bot
   workflow_dispatch:
     inputs:
       dry_run:
@@ -53,14 +56,15 @@ jobs:
       - name: Compute triage report and dispatch to Serge
         run: |
           python utils/integration_failure_triage.py \
-            --repo "${{ github.repository }}" \
+            --repo "$GITHUB_REPOSITORY" \
             --base-ref main \
             --serge-url "$SERGE_URL" \
             --report-out triage-report.md \
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+            $DRY_RUN_ARG
         env:
           SERGE_URL: ${{ vars.SERGE_URL || 'https://serge.huggingface.tech' }}
           SERGE_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          DRY_RUN_ARG: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
 
       - name: Upload triage report artifact
         if: always()
