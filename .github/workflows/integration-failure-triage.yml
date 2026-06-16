@@ -1,0 +1,72 @@
+name: Integration-failure triage (daily Serge auto-fix)
+
+# Once a day at 00:00 UTC: compute the integration-test failure triage report
+# from the daily CI dataset, then ask Serge to open a PR fixing the single most
+# common failure group. The Markdown report is kept as a build artifact.
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Compute the report but do not dispatch to Serge"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write   # required to mint the GitHub Actions OIDC token for Serge
+
+jobs:
+  triage:
+    # GitHub-hosted runners are not available to this org repo; use the same
+    # general-purpose CPU self-hosted group the nightlies use. It is on the HF
+    # network, so it reaches the internal Serge URL directly (no Tailscale).
+    runs-on:
+      group: aws-general-8-plus
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install "huggingface_hub>=0.25"
+
+      - name: Mint Serge OIDC token
+        id: oidc
+        run: |
+          set -euo pipefail
+          TOKEN=$(curl -sS --fail \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=serge" | jq -r .value)
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "::error::failed to mint OIDC token" >&2
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Compute triage report and dispatch to Serge
+        run: |
+          python utils/integration_failure_triage.py \
+            --repo "${{ github.repository }}" \
+            --base-ref main \
+            --serge-url "$SERGE_URL" \
+            --report-out triage-report.md \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+        env:
+          SERGE_URL: ${{ vars.SERGE_URL || 'https://serge.huggingface.tech' }}
+          SERGE_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+
+      - name: Upload triage report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-failure-triage-report
+          path: triage-report.md
+          retention-days: 90
+          if-no-files-found: warn
