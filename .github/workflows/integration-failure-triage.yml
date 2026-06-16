@@ -22,10 +22,8 @@ permissions:
 
 jobs:
   triage:
-    # Use the same general-purpose CPU self-hosted group the nightlies use.
     # Serge is internal, so the job joins Tailscale before dispatching.
-    runs-on:
-      group: aws-general-8-plus
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
