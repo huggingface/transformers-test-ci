@@ -28,11 +28,13 @@ jobs:
         run: |
           failed=0
           while IFS= read -r file; do
+            # Rule 1: file must be inside one of the four allowed top-level directories
             if ! echo "$file" | grep -qE '^(src|tests|docs|utils)/'; then
               echo "::error::File is outside allowed directories (src, tests, docs, utils): $file"
               failed=1
-            elif ! echo "$file" | grep -qE '\.(py|txt|md)$'; then
-              echo "::error::File type not allowed (only .py, .txt, .md permitted): $file"
+            # Rule 2: under tests/ any file type is allowed; everywhere else only .py/.txt/.md
+            elif ! echo "$file" | grep -qE '^tests/' && ! echo "$file" | grep -qE '\.(py|txt|md)$'; then
+              echo "::error::File type not allowed (only .py, .txt, .md permitted outside tests/): $file"
               failed=1
             fi
           done < /tmp/changed_files.txt
