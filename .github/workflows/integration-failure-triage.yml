@@ -1,8 +1,8 @@
 name: Integration-failure triage (daily Serge auto-fix)
 
 # Once a day at 00:00 UTC: compute the integration-test failure triage report
-# from the daily CI dataset, then ask Serge to open a PR fixing the single most
-# common failure group. The Markdown report is kept as a build artifact.
+# from the daily CI dataset, then ask Serge to open a PR fixing one of the
+# ordered failure groups. The Markdown report is kept as a build artifact.
 on:
   schedule:
     - cron: "0 0 * * *"
@@ -67,7 +67,7 @@ jobs:
             --report-out triage-report.md \
             $DRY_RUN_ARG
         env:
-          SERGE_URL: ${{ vars.SERGE_URL || 'https://serge.huggingface.tech' }}
+          SERGE_URL: ${{ vars.SERGE_URL || 'http://10.90.52.50:8080' }}
           SERGE_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
           DRY_RUN_ARG: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
 
