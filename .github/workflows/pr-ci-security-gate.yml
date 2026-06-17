@@ -148,7 +148,9 @@ jobs:
             gh api --method DELETE "repos/$REPO/issues/comments/$comment_id"
           fi
 
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "## CI Security Gate — automatic approval blocked
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "Thank you for your contribution 🤗!
+
+          ## CI Security Gate — automatic approval blocked
 
           This PR was **not** automatically approved for CI because the security gate failed.
 
