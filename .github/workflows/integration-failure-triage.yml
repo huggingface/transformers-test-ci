@@ -42,7 +42,7 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID_AI_REVIEW }}
           oauth-secret: ${{ secrets.TS_AUDIENCE_AI_REVIEW }}
           tags: tag:ci
-          args: --accept-dns=false
+          args: --accept-routes --accept-dns=false
 
       - name: Mint Serge OIDC token
         id: oidc
