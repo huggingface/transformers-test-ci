@@ -26,17 +26,17 @@ Run daily (e.g. from a GitHub Actions cron). This script:
   3. Classifies each surviving failure into a coarse mode (OOM, output_mismatch,
      cuda_runtime, load_error, import_or_config, other) and joins the latest
      day's CI ``git bisect`` attribution to cluster failures by ``bad_commit``.
-  4. Picks the **most common failure group** — the largest bad-commit cluster,
-     falling back to the largest failure-mode group when CI pinned nothing.
-  5. Renders a Markdown report and hands the focused failure group to **Serge**
-     (``POST /tasks``), which opens a PR proposing a fix. Serge runs no tests;
-     verification stays in CI.
+  4. Orders failure groups by likely impact — bad-commit clusters first,
+     followed by unpinned/flaky failures grouped by failure mode.
+  5. Renders a Markdown report and hands the ordered failure groups to
+     **Serge** (``POST /tasks``), which opens a PR proposing a fix. Serge runs
+     no tests; verification stays in CI.
 
 This is a self-contained port of the ``integration-failure-triage`` Space's
 report pipeline (fetch + filter + classify + cluster). The HTML renderer, the
 bucket-persist layer, the HTTP server, the 90-day history sweep, and the local
 ``git bisect`` helper are intentionally left out — none are needed to compute
-the daily report and dispatch the top failure group.
+the daily report and dispatch the failure groups.
 
 Usage:
 
@@ -351,18 +351,18 @@ def cluster_failures(filtered: list[dict], new_failures_latest: dict | None) -> 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Target selection — the "most common failure group".
+# Target selection — ordered failure groups.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def pick_target(report: dict) -> dict | None:
-    """Choose the most common failure group to hand to Serge.
+def pick_targets(report: dict) -> list[dict]:
+    """Return ordered failure groups to hand to Serge.
 
-    Primary: the largest bad-commit cluster (CI bisect blamed one commit for the
-    most tests). Fallback (no cluster pinned): the largest failure-mode group
-    among the non-clustered failures (unpinned + flaky).
+    Primary candidates are bad-commit clusters, already sorted by number of
+    failures. Fallback candidates are non-clustered failures grouped by coarse
+    failure mode, sorted by size.
 
-    Returns a normalized descriptor::
+    Each item is a normalized descriptor::
 
         {
           "kind": "cluster" | "failure_mode",
@@ -370,38 +370,43 @@ def pick_target(report: dict) -> dict | None:
           "failures": [...],         # the member failures
           "cluster": {...} | None,   # cluster meta when kind == "cluster"
         }
-
-    or None when there are no failures at all.
     """
+    targets: list[dict] = []
     clusters = report.get("clusters") or {}
-    if clusters:
-        # `clusters` is already sorted by size desc — take the first.
-        bc, c = next(iter(clusters.items()))
+    for bc, c in clusters.items():
         pr = c.get("pr_number")
-        return {
-            "kind": "cluster",
-            "label": (
-                f"{len(c['failures'])} integration tests regressed by commit "
-                f"{bc[:12]}" + (f" (PR #{pr})" if pr else "")
-            ),
-            "failures": c["failures"],
-            "cluster": c,
-        }
+        targets.append(
+            {
+                "kind": "cluster",
+                "label": (
+                    f"{len(c['failures'])} integration tests regressed by commit "
+                    f"{bc[:12]}" + (f" (PR #{pr})" if pr else "")
+                ),
+                "failures": c["failures"],
+                "cluster": c,
+            }
+        )
 
-    # Fallback: largest failure-mode group across non-clustered failures.
     pool = list(report.get("unpinned") or []) + list(report.get("flaky") or [])
-    if not pool:
-        return None
     by_mode: dict[str, list[dict]] = defaultdict(list)
     for f in pool:
         by_mode[f.get("failure_mode") or "other"].append(f)
-    mode, items = max(by_mode.items(), key=lambda kv: len(kv[1]))
-    return {
-        "kind": "failure_mode",
-        "label": f"{len(items)} unattributed integration tests sharing failure mode `{mode}`",
-        "failures": items,
-        "cluster": None,
-    }
+    for mode, items in sorted(by_mode.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        targets.append(
+            {
+                "kind": "failure_mode",
+                "label": f"{len(items)} unattributed integration tests sharing failure mode `{mode}`",
+                "failures": items,
+                "cluster": None,
+            }
+        )
+    return targets
+
+
+def pick_target(report: dict) -> dict | None:
+    """Choose the highest-impact failure group."""
+    targets = pick_targets(report)
+    return targets[0] if targets else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -425,7 +430,7 @@ def _failure_lines(failures: list[dict], window_len: int, limit: int = 60) -> li
     return lines
 
 
-def render_report(report: dict, target: dict | None, window: list[str]) -> str:
+def render_report(report: dict, targets: list[dict], window: list[str]) -> str:
     """Full Markdown triage summary (for the action log / artifact)."""
     t = report["totals"]
     win = f"{window[0]} → {window[-1]}" if window else "?"
@@ -442,11 +447,15 @@ def render_report(report: dict, target: dict | None, window: list[str]) -> str:
         f"- **{t['unpinned']}** unpinned (CI bisect did not converge)",
         "",
     ]
-    if target:
-        out.append("## Most common failure group (dispatched to Serge)")
-        out.append(f"**{target['label']}**")
+    if targets:
+        out.append("## Failure groups dispatched to Serge")
+        for idx, target in enumerate(targets, start=1):
+            out.append(f"{idx}. **{target['label']}**")
         out.append("")
-        out.extend(_failure_lines(target["failures"], len(window)))
+        out.append("## First failure group")
+        out.append(f"**{targets[0]['label']}**")
+        out.append("")
+        out.extend(_failure_lines(targets[0]["failures"], len(window)))
         out.append("")
     if report["clusters"]:
         out.append("## Pinned clusters (CI bisect)")
@@ -458,13 +467,9 @@ def render_report(report: dict, target: dict | None, window: list[str]) -> str:
     return "\n".join(out)
 
 
-def render_serge_context(target: dict, window: list[str]) -> str:
-    """The focused, untrusted failure report Serge receives as `context`."""
-    win = f"{window[0]} → {window[-1]}" if window else "?"
+def _render_serge_target(target: dict, window_len: int) -> list[str]:
     out = [
-        f"transformers integration-test failures — daily CI window {win}.",
-        "",
-        f"Most common failure group: {target['label']}.",
+        f"Failure group: {target['label']}.",
         "",
     ]
     c = target.get("cluster")
@@ -483,7 +488,7 @@ def render_serge_context(target: dict, window: list[str]) -> str:
         out.append("")
 
     out.append("Failing tests:")
-    out.extend(_failure_lines(target["failures"], len(window), limit=200))
+    out.extend(_failure_lines(target["failures"], window_len, limit=200))
     out.append("")
 
     if c and c.get("failure_excerpt"):
@@ -491,7 +496,26 @@ def render_serge_context(target: dict, window: list[str]) -> str:
         out.append("```")
         out.append(c["failure_excerpt"][:4000])
         out.append("```")
-    return "\n".join(out)
+    return out
+
+
+def render_serge_context(targets: list[dict], window: list[str]) -> str:
+    """The untrusted failure report Serge receives as `context`."""
+    win = f"{window[0]} → {window[-1]}" if window else "?"
+    out = [
+        f"transformers integration-test failures — daily CI window {win}.",
+        "",
+        "The sections below are ordered candidate failure groups. Try them in order.",
+        "If one group cannot be fixed safely, move to the next group in a full new cycle.",
+        "",
+    ]
+    total = len(targets)
+    for idx, target in enumerate(targets, start=1):
+        out.append(f"## Serge candidate failure group {idx}/{total}: {target['label']}")
+        out.append("")
+        out.extend(_render_serge_target(target, len(window)))
+        out.append("")
+    return "\n".join(out).rstrip()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -500,12 +524,13 @@ def render_serge_context(target: dict, window: list[str]) -> str:
 
 _INSTRUCTION = (
     "Fix the failing transformers integration tests described in the report below. "
-    "The report identifies the single most common failure group from the latest daily "
-    "CI run. Investigate the listed tests, determine the root cause of the shared "
-    "failure, and propose a minimal patch that makes them pass without touching "
-    "unrelated code. If the correct expected values genuinely changed, update them; "
-    "if the regression is in library code, fix the library code. Do not run the test "
-    "suite — CI will verify your PR."
+    "The report identifies ordered failure groups from the latest daily CI run. "
+    "Investigate the current group, determine the root cause of the shared failure, "
+    "and propose a minimal patch that makes it pass without touching unrelated code. "
+    "If the current group cannot be fixed safely, produce no patch so Serge can move "
+    "to the next group in a full new cycle. If the correct expected values genuinely "
+    "changed, update them; if the regression is in library code, fix the library code. "
+    "Do not run the test suite — CI will verify your PR."
 )
 
 
@@ -578,27 +603,27 @@ def main(argv: list[str] | None = None) -> int:
     kept = intersect_across_days(per_day, min_days=args.min_days)
     print(f"      {len(kept)} persistent integration-test failures", flush=True)
 
-    print("[3/4] Cluster with CI bisect attribution + pick the most common group…", flush=True)
+    print("[3/4] Cluster with CI bisect attribution + order failure groups…", flush=True)
     nf_latest = daily[max(daily)].get("new_failures")
     report = cluster_failures(kept, nf_latest)
-    target = pick_target(report)
+    targets = pick_targets(report)
 
-    report_md = render_report(report, target, window)
+    report_md = render_report(report, targets, window)
     if args.report_out:
         with open(args.report_out, "w") as f:
             f.write(report_md)
         print(f"      wrote report to {args.report_out}", flush=True)
     print("\n" + report_md + "\n", flush=True)
 
-    if target is None:
+    if not targets:
         print("[4/4] No integration-test failures to fix — nothing to dispatch. ✅", flush=True)
         return 0
 
-    context = render_serge_context(target, window)
-    title = f"Fix {target['label']}"[:120]
+    context = render_serge_context(targets, window)
+    title = f"Fix {targets[0]['label']}"[:120]
     payload = build_task_payload(args.repo, args.base_ref, context, title)
 
-    print(f"[4/4] Most common group: {target['label']}", flush=True)
+    print(f"[4/4] Dispatching {len(targets)} failure group(s); first: {targets[0]['label']}", flush=True)
 
     if args.dry_run:
         print("\n--- DRY RUN: Serge POST /tasks payload ---", flush=True)
