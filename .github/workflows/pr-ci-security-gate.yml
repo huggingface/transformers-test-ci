@@ -51,6 +51,10 @@ jobs:
             echo "has_py=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Install Bandit
+        if: steps.py-check.outputs.has_py == 'true'
+        run: pip install bandit --quiet
+
       - name: Checkout PR code for static analysis
         if: steps.py-check.outputs.has_py == 'true'
         uses: actions/checkout@v4
@@ -60,7 +64,6 @@ jobs:
       - name: Run Bandit on changed Python files
         if: steps.py-check.outputs.has_py == 'true'
         run: |
-          pip install bandit --quiet
           # -d '\n': split on newlines only (handles filenames with spaces)
           # --: end of options, prevents filenames starting with '-' being treated as flags
           xargs -d '\n' bandit --format json -l --ignore-nosec -o /tmp/bandit_report.json -- < /tmp/py_files.txt || true
