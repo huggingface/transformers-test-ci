@@ -59,11 +59,13 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
 from collections.abc import Iterable
@@ -519,6 +521,97 @@ def render_serge_context(targets: list[dict], window: list[str]) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# GitHub-backed task state — open Serge PRs are the ledger.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_STATE_SOURCE = "integration-failure-triage"
+
+
+def target_fingerprint(target: dict) -> str:
+    """Stable ID for one failure group, independent of Serge server state."""
+    c = target.get("cluster")
+    basis: dict[str, object] = {
+        "source": _STATE_SOURCE,
+        "kind": target.get("kind"),
+        "label": target.get("label"),
+        "bad_commit": c.get("bad_commit") if c else None,
+        "failures": [],
+    }
+    failures = []
+    for f in sorted(target.get("failures") or [], key=lambda item: (item["test"], item["gpu"])):
+        failures.append(
+            {
+                "test": f["test"],
+                "gpu": f["gpu"],
+                "mode": f.get("failure_mode") or "other",
+                "excerpt": short_excerpt(f.get("latest_trace") or f.get("trace") or ""),
+            }
+        )
+    basis["failures"] = failures
+    raw = json.dumps(basis, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def fingerprint_marker(fingerprint: str) -> str:
+    return f"<!-- serge-task:{_STATE_SOURCE}:sha256:{fingerprint} -->"
+
+
+def task_branch_prefix(fingerprint: str) -> str:
+    return f"serge/fix/itf-{fingerprint[:12]}"
+
+
+def add_state_marker(context: str, fingerprint: str) -> str:
+    return "\n".join(
+        [
+            fingerprint_marker(fingerprint),
+            f"Serge task fingerprint: `{fingerprint}`.",
+            "If you open or update a PR for this task, keep the HTML comment above in the PR body.",
+            "",
+            context,
+        ]
+    )
+
+
+def find_open_task_pr(repo: str, fingerprint: str, github_token: str | None) -> int | None:
+    """Find an open Serge PR for this fingerprint using GitHub as state."""
+    if "/" not in repo:
+        return None
+    owner, name = repo.split("/", 1)
+    marker = fingerprint_marker(fingerprint)
+    branch_prefix = task_branch_prefix(fingerprint)
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
+    page = 1
+    while True:
+        params = urllib.parse.urlencode({"state": "open", "per_page": 100, "page": page})
+        url = f"https://api.github.com/repos/{owner}/{name}/pulls?{params}"
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                pulls = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            print(f"      warning: could not query open PRs for task state: {e.code} {detail}", flush=True)
+            return None
+        except urllib.error.URLError as e:
+            print(f"      warning: could not query open PRs for task state: {e.reason}", flush=True)
+            return None
+        if not pulls:
+            return None
+        for pr in pulls:
+            body = pr.get("body") or ""
+            head_ref = ((pr.get("head") or {}).get("ref") or "")
+            if marker in body or head_ref.startswith(branch_prefix):
+                return int(pr["number"])
+        page += 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Serge dispatch — POST /tasks (GitHub Actions OIDC bearer).
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -530,12 +623,24 @@ _INSTRUCTION = (
     "If the current group cannot be fixed safely, produce no patch so Serge can move "
     "to the next group in a full new cycle. If the correct expected values genuinely "
     "changed, update them; if the regression is in library code, fix the library code. "
+    "Keep any `<!-- serge-task:... -->` HTML comment from the report in the PR body. "
     "Do not run the test suite — CI will verify your PR."
 )
 
 
-def build_task_payload(repo: str, base_ref: str, context: str, title: str | None) -> dict:
-    output: dict = {"mode": "new_pr", "branch_prefix": "serge/fix"}
+def build_task_payload(
+    repo: str,
+    base_ref: str,
+    context: str,
+    title: str | None,
+    *,
+    fingerprint: str,
+    existing_pr: int | None = None,
+) -> dict:
+    if existing_pr is not None:
+        output: dict = {"mode": "existing_pr", "pr_number": existing_pr}
+    else:
+        output = {"mode": "new_pr", "branch_prefix": task_branch_prefix(fingerprint)}
     if title:
         output["title"] = title
     return {
@@ -625,13 +730,15 @@ def main(argv: list[str] | None = None) -> int:
         print("[4/4] No integration-test failures to fix — nothing to dispatch. ✅", flush=True)
         return 0
 
-    context = render_serge_context(targets, window)
+    fingerprint = target_fingerprint(targets[0])
+    context = add_state_marker(render_serge_context(targets, window), fingerprint)
     title = f"Fix {targets[0]['label']}"[:120]
-    payload = build_task_payload(args.repo, args.base_ref, context, title)
 
     print(f"[4/4] Dispatching {len(targets)} failure group(s); first: {targets[0]['label']}", flush=True)
+    print(f"      task fingerprint: {fingerprint}", flush=True)
 
     if args.dry_run:
+        payload = build_task_payload(args.repo, args.base_ref, context, title, fingerprint=fingerprint)
         print("\n--- DRY RUN: Serge POST /tasks payload ---", flush=True)
         print(json.dumps(payload, indent=2), flush=True)
         print("\n--- context (untrusted, fed to Serge) ---\n" + context, flush=True)
@@ -644,6 +751,20 @@ def main(argv: list[str] | None = None) -> int:
     if not token:
         print("error: SERGE_OIDC_TOKEN env var is required unless --dry-run", file=sys.stderr)
         return 2
+
+    existing_pr = find_open_task_pr(args.repo, fingerprint, os.environ.get("GITHUB_TOKEN"))
+    if existing_pr is not None:
+        print(f"      found existing Serge task PR #{existing_pr}; dispatching follow-up", flush=True)
+    else:
+        print(f"      no open Serge task PR found for {fingerprint[:12]}; opening a new PR", flush=True)
+    payload = build_task_payload(
+        args.repo,
+        args.base_ref,
+        context,
+        title,
+        fingerprint=fingerprint,
+        existing_pr=existing_pr,
+    )
 
     print(f"      dispatching to Serge at {args.serge_url} …", flush=True)
     resp = dispatch_to_serge(args.serge_url, token, payload, timeout=args.serge_timeout)
