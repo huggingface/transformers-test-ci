@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   actions: write
+  pull-requests: write
 
 jobs:
   security-check:
@@ -130,6 +131,34 @@ jobs:
 
           print(f"Issues found in {len(findings)} location(s) but all pre-existing — OK")
           EOF
+
+      - name: Post failure comment on PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Delete any previous security gate failure comment to avoid duplicates
+          comment_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.body | contains("CI Security Gate — automatic approval blocked")) | .id' \
+            | head -1)
+          if [ -n "$comment_id" ]; then
+            gh api --method DELETE "repos/$REPO/issues/comments/$comment_id"
+          fi
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "## CI Security Gate — automatic approval blocked
+
+          This PR was **not** automatically approved for CI because the security gate failed.
+
+          **Possible reasons:**
+          - A changed file is outside the allowed directories (\`src/\`, \`tests/\`, \`docs/\`, \`utils/\`) or has a disallowed extension (only \`.py\`, \`.txt\`, \`.md\` are permitted outside \`tests/\`)
+          - A new high-severity security issue was detected in the changed Python files (Bandit check)
+
+          See the [workflow run]($RUN_URL) for the exact violations.
+
+          A maintainer can review and manually approve CI if a finding is a false positive."
 
   approve-pr-ci:
     needs: security-check
