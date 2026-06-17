@@ -42,7 +42,7 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID_AI_REVIEW }}
           oauth-secret: ${{ secrets.TS_AUDIENCE_AI_REVIEW }}
           tags: tag:ci
-          args: --accept-routes --accept-dns=false
+          args: --accept-dns=false
 
       - name: Mint Serge OIDC token
         id: oidc
@@ -64,10 +64,12 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --base-ref main \
             --serge-url "$SERGE_URL" \
+            --serge-timeout "$SERGE_TIMEOUT" \
             --report-out triage-report.md \
             $DRY_RUN_ARG
         env:
           SERGE_URL: ${{ vars.SERGE_URL || 'http://10.90.52.50:8080' }}
+          SERGE_TIMEOUT: ${{ vars.SERGE_TIMEOUT || '240' }}
           SERGE_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
           DRY_RUN_ARG: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
 

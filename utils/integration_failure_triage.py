@@ -547,7 +547,7 @@ def build_task_payload(repo: str, base_ref: str, context: str, title: str | None
     }
 
 
-def dispatch_to_serge(serge_url: str, token: str, payload: dict, timeout: int = 60) -> dict:
+def dispatch_to_serge(serge_url: str, token: str, payload: dict, timeout: int = 240) -> dict:
     """POST the task to Serge. Returns the parsed 202 response body."""
     url = serge_url.rstrip("/") + "/tasks"
     data = json.dumps(payload).encode("utf-8")
@@ -585,6 +585,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--base-ref", default="main", help="branch the fix PR starts from")
     p.add_argument(
         "--serge-url", default=os.environ.get("SERGE_URL"), help="Serge base URL (e.g. https://serge.example.com)"
+    )
+    p.add_argument(
+        "--serge-timeout",
+        type=int,
+        default=int(os.environ.get("SERGE_TIMEOUT", "240")),
+        help="seconds to wait for Serge to accept the task",
     )
     p.add_argument("--report-out", help="write the full Markdown report to this path")
     p.add_argument("--dry-run", action="store_true", help="compute + print everything but POST nothing to Serge")
@@ -640,7 +646,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(f"      dispatching to Serge at {args.serge_url} …", flush=True)
-    resp = dispatch_to_serge(args.serge_url, token, payload)
+    resp = dispatch_to_serge(args.serge_url, token, payload, timeout=args.serge_timeout)
     print(f"      ✅ Serge accepted task: {json.dumps(resp)}", flush=True)
     job_url = resp.get("url")
     if job_url:
