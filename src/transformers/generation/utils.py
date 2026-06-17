@@ -1689,10 +1689,6 @@ class GenerationMixin(ContinuousMixin):
         # `torch.export.export` usually raises an exception if it is called
         # with ``strict=True``. deepcopy can only be processed if ``strict=False``.
         generation_config = copy.deepcopy(generation_config)
-        # Keep track of the original cache_implementation to distinguish between
-        # user-provided values and model defaults loaded from the Hub.
-        original_cache_implementation = generation_config.cache_implementation
-
         # First set values from the loaded `self.generation_config`, then set default values (BC)
         #
         # Only update values that are `None`, i.e. these values were not explicitly set by users to `generate()`,
@@ -1705,13 +1701,6 @@ class GenerationMixin(ContinuousMixin):
 
         # Finally, if there are any kwargs, update config with it -> highest priority at the end
         model_kwargs = generation_config.update(**kwargs)
-
-        # Related to #40039: prior to this PR, models with sliding window attention were forced to have
-        # `cache_implementation="hybrid"` (the static sliding window cache). For these models, we now want to use
-        # the dynamic sliding window cache by default, so we UNSET `cache_implementation` if it is a default value.
-        # (if we're inside this branch, then it is because we're using default values from the Hub)
-        if generation_config.cache_implementation == "hybrid" and original_cache_implementation != "hybrid" and "cache_implementation" not in kwargs:
-            generation_config.cache_implementation = None
 
         # It doesn't make sense to allow kwargs and `generation_config`, that should be mutually exclusive
         if generation_config_provided and set(kwargs.keys()) - set(model_kwargs.keys()):
