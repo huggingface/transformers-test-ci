@@ -18,6 +18,15 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
+          # Pre-check: changed_files on the PR object may reflect the true count before the
+          # REST file-listing endpoint's 3000-file cap kicks in (not officially documented)
+          changed_files_count=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.changed_files')
+          echo "Total files changed: $changed_files_count"
+          if [ "$changed_files_count" -ge 50 ]; then
+            echo "::error::PR touches $changed_files_count files — only PRs with fewer than 50 changed files are automatically approved. A maintainer must review and approve CI manually."
+            exit 1
+          fi
+
           # Save full API response (includes patches) and extract non-deleted filenames
           gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" | jq -s 'add' > /tmp/pr_files.json
           jq -r '.[] | select(.status != "removed") | .filename' /tmp/pr_files.json > /tmp/changed_files.txt
@@ -158,6 +167,7 @@ jobs:
           This PR was **not** automatically approved for CI because the security gate failed.
 
           **Possible reasons:**
+          - The PR touches 50 or more files — only PRs with fewer than 50 changed files are automatically approved
           - A changed file is outside the allowed directories (\`src/\`, \`tests/\`, \`docs/\`, \`utils/\`) or has a disallowed extension (only \`.py\`, \`.txt\`, \`.md\` are permitted outside \`tests/\`)
           - A new high-severity security issue was detected in the changed Python files (Bandit check)
 
