@@ -3,6 +3,8 @@ name: PR CI Security Gate
 on:
   workflow_call:
 
+permissions: {}
+
 jobs:
   get-changed-files:
     runs-on: ubuntu-22.04
