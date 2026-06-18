@@ -33,9 +33,13 @@ jobs:
             if ! echo "$file" | grep -qE '^(src|tests|docs|utils)/'; then
               echo "::error::File is outside allowed directories (src, tests, docs, utils): $file"
               failed=1
-            # Rule 2: under tests/ any file type is allowed; everywhere else only .py/.txt/.md
-            elif ! echo "$file" | grep -qE '^tests/' && ! echo "$file" | grep -qE '\.(py|txt|md)$'; then
-              echo "::error::File type not allowed (only .py, .txt, .md permitted outside tests/): $file"
+            # Rule 2: under docs/ only .md and .yml are allowed
+            elif echo "$file" | grep -qE '^docs/' && ! echo "$file" | grep -qE '\.(md|yml)$'; then
+              echo "::error::File type not allowed in docs/ (only .md, .yml permitted): $file"
+              failed=1
+            # Rule 3: under tests/ any file type is allowed; everywhere else only .py/.txt/.md
+            elif ! echo "$file" | grep -qE '^(tests|docs)/' && ! echo "$file" | grep -qE '\.(py|txt|md)$'; then
+              echo "::error::File type not allowed (only .py, .txt, .md permitted outside tests/ and docs/): $file"
               failed=1
             fi
           done < /tmp/changed_files.txt
@@ -158,7 +162,7 @@ jobs:
           This PR was **not** automatically approved for CI because the security gate failed.
 
           **Possible reasons:**
-          - A changed file is outside the allowed directories (\`src/\`, \`tests/\`, \`docs/\`, \`utils/\`) or has a disallowed extension (only \`.py\`, \`.txt\`, \`.md\` are permitted outside \`tests/\`)
+          - A changed file is outside the allowed directories (\`src/\`, \`tests/\`, \`docs/\`, \`utils/\`), has a disallowed extension (only \`.py\`, \`.txt\`, \`.md\` permitted outside \`tests/\` and \`docs/\`), or is not \`.md\`/\`.yml\` inside \`docs/\`
           - A new high-severity security issue was detected in the changed Python files (Bandit check)
 
           See the [workflow run]($RUN_URL) for the exact violations.
