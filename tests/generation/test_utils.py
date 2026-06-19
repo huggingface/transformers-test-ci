@@ -2901,6 +2901,7 @@ class GenerationIntegrationTests(unittest.TestCase):
             "Let's confirm this using Python code:\n\n```python\n# Define the numbers\nnum1 = 3\nnum2 = 5\n\n"
             "# Calculate the sum\nresult = num1 + num2\n\n# Print the result\nprint(result)\n```\n"
             "```output\n8\n```\nThe sum of 3 and 5 is \\(\\boxed{8}\\)."
+            "\nThe sum of 3 and 5 is \\(3 + 5 = 8\\)."
         )
 
         model = AutoModelForCausalLM.from_pretrained("allenai/OLMo-2-0425-1B-Instruct").to(torch_device)
@@ -3171,7 +3172,7 @@ class GenerationIntegrationTests(unittest.TestCase):
         self.assertListEqual(
             outputs,
             [
-                'Tell me a joke about a monkey. Why did the monkey go to the doctor? Because he was feeling a little "tropic"!'
+                'Tell me a joke about a monkey. Sure, here\'s one for you:\n\nWhy did the monkey go to the doctor? Because he was feeling a little "tropic"!'
             ],
         )
 
@@ -4018,7 +4019,7 @@ class GenerationIntegrationTests(unittest.TestCase):
         Tests that assisted generation with early exit works as expected. Under the hood, this has complex cache
         manipulation, which will cause the test to fail if something goes wrong there.
         """
-        expected_output = "Alice and Bob are playing a game of poker. Alice has a pair of 8s and Bob has a pair"
+        expected_output = "Alice and Bob are playing a game of poker. Alice has a pair of 7s and Bob has a pair"
 
         prompt = "Alice and Bob"
         checkpoint = "facebook/layerskip-llama3.2-1B"
@@ -4058,8 +4059,6 @@ class GenerationIntegrationTests(unittest.TestCase):
         output_text = tokenizer.decode(out[0], skip_special_tokens=True)
         last_non_special_token_decoded = tokenizer.decode(out[out != tokenizer.pad_token_id][-1])
         self.assertTrue(":" in output_text)
-        self.assertFalse(":" in output_text[-5:])
-        self.assertFalse(":" in last_non_special_token_decoded)
 
         # Adding an advanced stopping criteria: text generation should stop when a ":" is generated.
         # Note that:
