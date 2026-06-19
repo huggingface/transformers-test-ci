@@ -660,6 +660,7 @@ class PeftAdapterMixin:
             sharded_metadata=sharded_metadata,
             weight_mapping=peft_weight_conversions,
             device_map=device_map,
+            ignore_mismatched_sizes=load_config.ignore_mismatched_sizes or getattr(self, "_hotswap_enabled", False),
         )
 
         loading_info, _ = self._load_pretrained_model(
