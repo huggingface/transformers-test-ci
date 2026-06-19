@@ -693,7 +693,7 @@ class PeftAdapterMixin:
         log_state_dict_report(
             model=self,
             pretrained_model_name_or_path=load_config.pretrained_model_name_or_path,
-            ignore_mismatched_sizes=load_config.ignore_mismatched_sizes,
+            ignore_mismatched_sizes=ignore_mismatched_sizes,
             loading_info=loading_info,
             logger=logger,
         )
