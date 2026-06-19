@@ -514,6 +514,9 @@ class PeftAdapterMixin:
         base_load_config.setdefault("pretrained_model_name_or_path", None)
         load_config = LoadStateDictConfig(**base_load_config)
         peft_model_id = peft_model_id or load_config.pretrained_model_name_or_path
+        # When hotswapping adapters with different ranks, the loaded weights will have mismatched sizes,
+        # so we must ignore size mismatches during loading.
+        load_config.ignore_mismatched_sizes = load_config.ignore_mismatched_sizes or getattr(self, "_hotswap_enabled", False)
 
         if hotswap == "auto":
             # if user called model.enable_peft_hotswap and this is not the first adapter, enable hotswap
@@ -660,7 +663,6 @@ class PeftAdapterMixin:
             sharded_metadata=sharded_metadata,
             weight_mapping=peft_weight_conversions,
             device_map=device_map,
-            ignore_mismatched_sizes=load_config.ignore_mismatched_sizes or getattr(self, "_hotswap_enabled", False),
         )
 
         loading_info, _ = self._load_pretrained_model(
