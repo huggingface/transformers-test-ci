@@ -15,6 +15,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 
 REPO_PATH = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -139,6 +140,103 @@ class PickTargetsGroupingTest(unittest.TestCase):
         targets = itf.pick_targets(self._report(unpinned))
         fps = {itf.target_fingerprint(t) for t in targets}
         self.assertEqual(len(fps), 2)
+
+
+class MatchExistingPrTest(unittest.TestCase):
+    def test_matches_by_fingerprint_marker(self):
+        fp = "a" * 64
+        pulls = [{"number": 5, "body": "stuff\n" + itf.fingerprint_marker(fp), "head": {"ref": "x"}}]
+        self.assertEqual(itf.match_existing_pr(pulls, fp), 5)
+
+    def test_matches_by_branch_prefix(self):
+        fp = "b" * 64
+        pulls = [{"number": 9, "body": "", "head": {"ref": itf.task_branch_prefix(fp) + "-2"}}]
+        self.assertEqual(itf.match_existing_pr(pulls, fp), 9)
+
+    def test_no_match(self):
+        pulls = [{"number": 1, "body": "unrelated", "head": {"ref": "feature/x"}}]
+        self.assertIsNone(itf.match_existing_pr(pulls, "c" * 64))
+
+
+class DispatchTargetsTest(unittest.TestCase):
+    def _targets(self):
+        return [
+            {"kind": "model_failures", "label": "g1", "model": "a", "failure_mode": "output_mismatch",
+             "cluster": None, "failures": [
+                 {"model": "a", "gpu": "single", "test": "t::AIntegrationTest::a", "trace": "x",
+                  "latest_trace": "x", "days_seen": 6, "failure_mode": "output_mismatch"}]},
+            {"kind": "model_failures", "label": "g2", "model": "b", "failure_mode": "OOM",
+             "cluster": None, "failures": [
+                 {"model": "b", "gpu": "single", "test": "t::BIntegrationTest::a", "trace": "y",
+                  "latest_trace": "y", "days_seen": 6, "failure_mode": "OOM"}]},
+        ]
+
+    def test_one_task_per_group(self):
+        sent = []
+
+        def fake_dispatch(serge_url, token, payload, timeout=240):
+            sent.append(payload)
+            return {"id": f"job{len(sent)}", "url": f"/tasks/o/r/job{len(sent)}"}
+
+        with (
+            patch.object(itf, "list_open_pulls", return_value=[]),
+            patch.object(itf, "dispatch_to_serge", side_effect=fake_dispatch),
+        ):
+            accepted, failed = itf.dispatch_targets(
+                self._targets(), repo="o/r", base_ref="main", serge_url="http://s",
+                token="tok", window=["2026-06-19"], timeout=10, github_token=None,
+            )
+
+        self.assertEqual((accepted, failed), (2, 0))
+        self.assertEqual(len(sent), 2)
+        # Each task is a new_pr with its own fingerprint-derived branch.
+        branches = {p["output"]["branch_prefix"] for p in sent}
+        self.assertEqual(len(branches), 2)
+        self.assertTrue(all(p["output"]["mode"] == "new_pr" for p in sent))
+
+    def test_existing_pr_becomes_followup(self):
+        targets = self._targets()
+        fp0 = itf.target_fingerprint(targets[0])
+        pulls = [{"number": 42, "body": itf.fingerprint_marker(fp0), "head": {"ref": "z"}}]
+
+        sent = []
+
+        def fake_dispatch(serge_url, token, payload, timeout=240):
+            sent.append(payload)
+            return {"id": "j", "url": "/tasks/o/r/j"}
+
+        with (
+            patch.object(itf, "list_open_pulls", return_value=pulls),
+            patch.object(itf, "dispatch_to_serge", side_effect=fake_dispatch),
+        ):
+            itf.dispatch_targets(
+                targets, repo="o/r", base_ref="main", serge_url="http://s",
+                token="tok", window=["2026-06-19"], timeout=10, github_token=None,
+            )
+
+        self.assertEqual(sent[0]["output"], {"mode": "existing_pr", "pr_number": 42, "title": "Fix g1"})
+        self.assertEqual(sent[1]["output"]["mode"], "new_pr")
+
+    def test_one_failure_does_not_abort_the_rest(self):
+        calls = []
+
+        def fake_dispatch(serge_url, token, payload, timeout=240):
+            calls.append(payload)
+            if len(calls) == 1:
+                raise itf.SergeDispatchError("boom")
+            return {"id": "j", "url": "/tasks/o/r/j"}
+
+        with (
+            patch.object(itf, "list_open_pulls", return_value=[]),
+            patch.object(itf, "dispatch_to_serge", side_effect=fake_dispatch),
+        ):
+            accepted, failed = itf.dispatch_targets(
+                self._targets(), repo="o/r", base_ref="main", serge_url="http://s",
+                token="tok", window=["2026-06-19"], timeout=10, github_token=None,
+            )
+
+        self.assertEqual((accepted, failed), (1, 1))
+        self.assertEqual(len(calls), 2)  # second group still attempted
 
 
 if __name__ == "__main__":

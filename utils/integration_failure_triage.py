@@ -30,9 +30,11 @@ Run daily (e.g. from a GitHub Actions cron). This script:
      followed by unpinned/flaky failures grouped by ``(model, failure mode)``
      so each dispatched group is a single coherent fix unit (one model, one
      kind of failure) rather than a giant cross-model bucket Serge can't fix.
-  5. Renders a Markdown report and hands the ordered failure groups to
-     **Serge** (``POST /tasks``), which opens a PR proposing a fix. Serge runs
-     no tests; verification stays in CI.
+  5. Renders a Markdown report and fans out **one Serge task per group**
+     (``POST /tasks``), so a single run iterates over the groups — one PR per
+     group — instead of fixing only the first. Each group is tracked by its
+     own fingerprint/branch, so re-runs reuse the existing PR. Serge runs no
+     tests; verification stays in CI.
 
 This is a self-contained port of the ``integration-failure-triage`` Space's
 report pipeline (fetch + filter + classify + cluster). The HTML renderer, the
@@ -553,15 +555,27 @@ def _render_serge_target(target: dict, window_len: int) -> list[str]:
 
 
 def render_serge_context(targets: list[dict], window: list[str]) -> str:
-    """The untrusted failure report Serge receives as `context`."""
+    """The untrusted failure report Serge receives as `context`.
+
+    Usually called with a single group (the dispatcher fans out one task per
+    group), but still accepts a list so a task can carry fallback candidates."""
     win = f"{window[0]} → {window[-1]}" if window else "?"
-    out = [
-        f"transformers integration-test failures — daily CI window {win}.",
-        "",
-        "The sections below are ordered candidate failure groups. Try them in order.",
-        "If one group cannot be fixed safely, move to the next group in a full new cycle.",
-        "",
-    ]
+    if len(targets) == 1:
+        out = [
+            f"transformers integration-test failures — daily CI window {win}.",
+            "",
+            "This task targets ONE failure group, described below. Fix it with a "
+            "minimal patch, or return an empty patch if it cannot be fixed safely.",
+            "",
+        ]
+    else:
+        out = [
+            f"transformers integration-test failures — daily CI window {win}.",
+            "",
+            "The sections below are ordered candidate failure groups. Try them in order.",
+            "If one group cannot be fixed safely, move to the next group in a full new cycle.",
+            "",
+        ]
     total = len(targets)
     for idx, target in enumerate(targets, start=1):
         out.append(f"## Serge candidate failure group {idx}/{total}: {target['label']}")
@@ -623,13 +637,13 @@ def add_state_marker(context: str, fingerprint: str) -> str:
     )
 
 
-def find_open_task_pr(repo: str, fingerprint: str, github_token: str | None) -> int | None:
-    """Find an open Serge PR for this fingerprint using GitHub as state."""
+def list_open_pulls(repo: str, github_token: str | None) -> list[dict]:
+    """All open PRs for ``repo`` (paginated). Returns ``[]`` on error so the
+    caller treats 'could not check' the same as 'no existing PR'. Fetched once
+    per run and matched in-memory against every group's fingerprint."""
     if "/" not in repo:
-        return None
+        return []
     owner, name = repo.split("/", 1)
-    marker = fingerprint_marker(fingerprint)
-    branch_prefix = task_branch_prefix(fingerprint)
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -637,6 +651,7 @@ def find_open_task_pr(repo: str, fingerprint: str, github_token: str | None) -> 
     if github_token:
         headers["Authorization"] = f"Bearer {github_token}"
 
+    pulls_all: list[dict] = []
     page = 1
     while True:
         params = urllib.parse.urlencode({"state": "open", "per_page": 100, "page": page})
@@ -648,18 +663,32 @@ def find_open_task_pr(repo: str, fingerprint: str, github_token: str | None) -> 
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")
             print(f"      warning: could not query open PRs for task state: {e.code} {detail}", flush=True)
-            return None
+            return pulls_all
         except urllib.error.URLError as e:
             print(f"      warning: could not query open PRs for task state: {e.reason}", flush=True)
-            return None
+            return pulls_all
         if not pulls:
-            return None
-        for pr in pulls:
-            body = pr.get("body") or ""
-            head_ref = ((pr.get("head") or {}).get("ref") or "")
-            if marker in body or head_ref.startswith(branch_prefix):
-                return int(pr["number"])
+            return pulls_all
+        pulls_all.extend(pulls)
         page += 1
+
+
+def match_existing_pr(pulls: list[dict], fingerprint: str) -> int | None:
+    """Return the number of an open PR already tracking ``fingerprint`` (by the
+    HTML marker in its body or its ``serge/fix/itf-<fp>`` branch), else None."""
+    marker = fingerprint_marker(fingerprint)
+    branch_prefix = task_branch_prefix(fingerprint)
+    for pr in pulls:
+        body = pr.get("body") or ""
+        head_ref = (pr.get("head") or {}).get("ref") or ""
+        if marker in body or head_ref.startswith(branch_prefix):
+            return int(pr["number"])
+    return None
+
+
+def find_open_task_pr(repo: str, fingerprint: str, github_token: str | None) -> int | None:
+    """Find an open Serge PR for this fingerprint using GitHub as state."""
+    return match_existing_pr(list_open_pulls(repo, github_token), fingerprint)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -721,6 +750,11 @@ def build_task_payload(
     }
 
 
+class SergeDispatchError(Exception):
+    """A single ``POST /tasks`` failed. Raised (not ``SystemExit``) so the
+    fan-out loop can record the failure and continue to the next group."""
+
+
 def dispatch_to_serge(serge_url: str, token: str, payload: dict, timeout: int = 240) -> dict:
     """POST the task to Serge. Returns the parsed 202 response body."""
     url = serge_url.rstrip("/") + "/tasks"
@@ -740,9 +774,55 @@ def dispatch_to_serge(serge_url: str, token: str, payload: dict, timeout: int = 
             return json.loads(body) if body else {}
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")
-        raise SystemExit(f"error: Serge POST /tasks failed: {e.code} {e.reason}\n{detail}")
+        raise SergeDispatchError(f"Serge POST /tasks failed: {e.code} {e.reason}\n{detail}")
     except urllib.error.URLError as e:
-        raise SystemExit(f"error: could not reach Serge at {url}: {e.reason}")
+        raise SergeDispatchError(f"could not reach Serge at {url}: {e.reason}")
+
+
+def dispatch_targets(
+    targets: list[dict],
+    *,
+    repo: str,
+    base_ref: str,
+    serge_url: str,
+    token: str,
+    window: list[str],
+    timeout: int,
+    github_token: str | None,
+) -> tuple[int, int]:
+    """Dispatch one Serge task per failure group — one PR per group — so a
+    single run iterates over every group instead of fixing only the first.
+
+    Each ``POST /tasks`` returns immediately (202); Serge queues the work and
+    runs it on its own task pool, so this just fires the fan-out and reports
+    what was accepted. Open PRs are listed once and matched in-memory, so a
+    group that already has a Serge PR gets a follow-up rather than a duplicate.
+    Returns ``(accepted, failed)``."""
+    pulls = list_open_pulls(repo, github_token)
+    accepted = failed = 0
+    total = len(targets)
+    for idx, target in enumerate(targets, start=1):
+        fingerprint = target_fingerprint(target)
+        context = add_state_marker(render_serge_context([target], window), fingerprint)
+        title = f"Fix {target['label']}"[:120]
+        existing_pr = match_existing_pr(pulls, fingerprint)
+        where = f"follow-up on PR #{existing_pr}" if existing_pr else "new PR"
+        print(f"  [{idx}/{total}] {target['label']}", flush=True)
+        print(f"        fingerprint {fingerprint[:12]} → {where}", flush=True)
+        payload = build_task_payload(
+            repo, base_ref, context, title, fingerprint=fingerprint, existing_pr=existing_pr
+        )
+        try:
+            resp = dispatch_to_serge(serge_url, token, payload, timeout=timeout)
+        except SergeDispatchError as e:
+            print(f"        ✗ {e}", flush=True)
+            failed += 1
+            continue
+        accepted += 1
+        job_url = resp.get("url")
+        suffix = f" → {serge_url.rstrip('/')}{job_url}" if job_url else ""
+        print(f"        ✅ accepted {resp.get('id', '?')}{suffix}", flush=True)
+    return accepted, failed
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -813,18 +893,23 @@ def main(argv: list[str] | None = None) -> int:
         print("[4/4] No integration-test failures to fix — nothing to dispatch. ✅", flush=True)
         return 0
 
-    fingerprint = target_fingerprint(targets[0])
-    context = add_state_marker(render_serge_context(targets, window), fingerprint)
-    title = f"Fix {targets[0]['label']}"[:120]
-
-    print(f"[4/4] Dispatching {len(targets)} failure group(s); first: {targets[0]['label']}", flush=True)
-    print(f"      task fingerprint: {fingerprint}", flush=True)
+    print(
+        f"[4/4] Dispatching {len(targets)} failure group(s) — one Serge task/PR per group:",
+        flush=True,
+    )
 
     if args.dry_run:
-        payload = build_task_payload(args.repo, args.base_ref, context, title, fingerprint=fingerprint)
-        print("\n--- DRY RUN: Serge POST /tasks payload ---", flush=True)
+        for idx, target in enumerate(targets, start=1):
+            print(f"  [{idx}/{len(targets)}] {target_fingerprint(target)[:12]}  {target['label']}", flush=True)
+        sample = targets[0]
+        fp = target_fingerprint(sample)
+        context = add_state_marker(render_serge_context([sample], window), fp)
+        payload = build_task_payload(
+            args.repo, args.base_ref, context, f"Fix {sample['label']}"[:120], fingerprint=fp
+        )
+        print("\n--- DRY RUN: sample Serge POST /tasks payload (group 1/N) ---", flush=True)
         print(json.dumps(payload, indent=2), flush=True)
-        print("\n--- context (untrusted, fed to Serge) ---\n" + context, flush=True)
+        print("\n--- sample context (untrusted, fed to Serge) ---\n" + context, flush=True)
         return 0
 
     if not args.serge_url:
@@ -835,27 +920,23 @@ def main(argv: list[str] | None = None) -> int:
         print("error: SERGE_OIDC_TOKEN env var is required unless --dry-run", file=sys.stderr)
         return 2
 
-    existing_pr = find_open_task_pr(args.repo, fingerprint, os.environ.get("GITHUB_TOKEN"))
-    if existing_pr is not None:
-        print(f"      found existing Serge task PR #{existing_pr}; dispatching follow-up", flush=True)
-    else:
-        print(f"      no open Serge task PR found for {fingerprint[:12]}; opening a new PR", flush=True)
-    payload = build_task_payload(
-        args.repo,
-        args.base_ref,
-        context,
-        title,
-        fingerprint=fingerprint,
-        existing_pr=existing_pr,
+    accepted, failed = dispatch_targets(
+        targets,
+        repo=args.repo,
+        base_ref=args.base_ref,
+        serge_url=args.serge_url,
+        token=token,
+        window=window,
+        timeout=args.serge_timeout,
+        github_token=os.environ.get("GITHUB_TOKEN"),
     )
-
-    print(f"      dispatching to Serge at {args.serge_url} …", flush=True)
-    resp = dispatch_to_serge(args.serge_url, token, payload, timeout=args.serge_timeout)
-    print(f"      ✅ Serge accepted task: {json.dumps(resp)}", flush=True)
-    job_url = resp.get("url")
-    if job_url:
-        print(f"      follow: {args.serge_url.rstrip('/')}{job_url}", flush=True)
-    return 0
+    print(
+        f"      dispatched {accepted}/{len(targets)} group(s) to Serge"
+        + (f"; {failed} failed" if failed else ""),
+        flush=True,
+    )
+    # Surface a hard failure only when we had work but landed nothing.
+    return 1 if accepted == 0 else 0
 
 
 if __name__ == "__main__":
