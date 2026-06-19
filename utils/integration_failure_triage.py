@@ -30,11 +30,12 @@ Run daily (e.g. from a GitHub Actions cron). This script:
      followed by unpinned/flaky failures grouped by ``(model, failure mode)``
      so each dispatched group is a single coherent fix unit (one model, one
      kind of failure) rather than a giant cross-model bucket Serge can't fix.
-  5. Renders a Markdown report and fans out **one Serge task per group**
-     (``POST /tasks``), so a single run iterates over the groups — one PR per
-     group — instead of fixing only the first. Each group is tracked by its
-     own fingerprint/branch, so re-runs reuse the existing PR. Serge runs no
-     tests; verification stays in CI.
+  5. Opens a per-run **tracking issue** listing every dispatched group, then
+     fans out **one Serge task per group** (``POST /tasks``), so a single run
+     iterates over the groups — one PR per group — instead of fixing only the
+     first. Each group is tracked by its own fingerprint/branch (re-runs reuse
+     the existing PR), and each task is told to back-reference the tracking
+     issue so its PR cross-links there. Serge runs no tests; CI verifies.
 
 This is a self-contained port of the ``integration-failure-triage`` Space's
 report pipeline (fetch + filter + classify + cluster). The HTML renderer, the
@@ -252,7 +253,11 @@ def classify(trace: str) -> str:
 
 
 def short_excerpt(trace: str, max_chars: int = 240) -> str:
-    """Last non-empty line of the trace (the actual exception line), trimmed."""
+    """Last non-empty line of the trace (the actual exception line), trimmed.
+
+    Used for the stable fingerprint and the one-line human summary. For the
+    rich actual-vs-expected detail an agent needs to write a fix, see
+    :func:`trace_excerpt`."""
     if not trace:
         return ""
     for line in reversed(trace.splitlines()):
@@ -260,6 +265,30 @@ def short_excerpt(trace: str, max_chars: int = 240) -> str:
         if line:
             return (line[: max_chars - 1] + "…") if len(line) > max_chars else line
     return ""
+
+
+def trace_excerpt(trace: str, max_chars: int = 2500) -> str:
+    """The TAIL of the trace — the assertion/exception and its actual-vs-expected
+    diff — kept multi-line and up to ``max_chars`` long.
+
+    A pytest traceback puts the failure detail (e.g. ``AssertionError: Lists
+    differ: [...] != [...]`` or the tensor-mismatch table) at the very end, so
+    the tail carries the values a fix needs. The old one-line, 240-char
+    ``short_excerpt`` threw that away, which is why the agent kept reporting it
+    could not reconstruct expected values. We cut at a line boundary and prefix
+    ``…`` when truncated. (Note: unittest itself elides long values as
+    ``[N chars]`` at test time, so very long text outputs can still be only
+    partially recoverable — that truncation is upstream of this report.)"""
+    trace = (trace or "").rstrip()
+    if not trace:
+        return ""
+    if len(trace) <= max_chars:
+        return trace
+    tail = trace[-max_chars:]
+    newline = tail.find("\n")
+    if newline != -1:
+        tail = tail[newline + 1 :]
+    return "…\n" + tail
 
 
 # A finer "what does the failure look like" signature than the coarse mode.
@@ -470,18 +499,41 @@ def pick_target(report: dict) -> dict | None:
 
 _GH = "https://github.com/huggingface/transformers"
 
+# Serge truncates the task context at ~40k chars; budget the failing-tests
+# section below that so the actual-vs-expected detail survives intact rather
+# than being cut off mid-trace by the downstream limit.
+_SERGE_TRACE_BUDGET = 30000
+_DEFAULT_TRACE_CHARS = 3000  # cap on the trace tail kept per failure
+_FULL_TRACE_LIMIT = 40  # max failures rendered with full traces in one group
 
-def _failure_lines(failures: list[dict], window_len: int, limit: int = 60) -> list[str]:
+
+def _failure_lines(
+    failures: list[dict],
+    window_len: int,
+    limit: int = 60,
+    trace_chars: int = 0,
+) -> list[str]:
+    """One bullet per failure. When ``trace_chars`` > 0, append the trace tail
+    (the actual-vs-expected detail, via :func:`trace_excerpt`) in a fenced block
+    so an agent can write a fix; otherwise just the one-line exception summary."""
     lines: list[str] = []
     ordered = sorted(failures, key=lambda f: (f.get("failure_mode") or "", f["model"], f["gpu"], f["test"]))
     for f in ordered[:limit]:
         mode = f.get("failure_mode", "other")
         lines.append(f"- `{f['test']}` [{f['gpu']}-gpu] ({mode}, seen {f['days_seen']}/{window_len})")
-        excerpt = short_excerpt(f.get("latest_trace") or f.get("trace") or "")
-        if excerpt:
-            lines.append(f"  - {excerpt}")
+        trace = f.get("latest_trace") or f.get("trace") or ""
+        if trace_chars > 0:
+            detail = trace_excerpt(trace, trace_chars)
+            if detail:
+                lines.append("  ```")
+                lines.extend("  " + ln for ln in detail.splitlines())
+                lines.append("  ```")
+        else:
+            excerpt = short_excerpt(trace)
+            if excerpt:
+                lines.append(f"  - {excerpt}")
     if len(failures) > limit:
-        lines.append(f"- … and {len(failures) - limit} more")
+        lines.append(f"- … and {len(failures) - limit} more (omitted to bound the report)")
     return lines
 
 
@@ -522,7 +574,9 @@ def render_report(report: dict, targets: list[dict], window: list[str]) -> str:
     return "\n".join(out)
 
 
-def _render_serge_target(target: dict, window_len: int) -> list[str]:
+def _render_serge_target(
+    target: dict, window_len: int, trace_chars: int = _DEFAULT_TRACE_CHARS
+) -> list[str]:
     out = [
         f"Failure group: {target['label']}.",
         "",
@@ -542,8 +596,13 @@ def _render_serge_target(target: dict, window_len: int) -> list[str]:
         out.append("Failure-mode mix: " + ", ".join(f"{m} ({n})" for m, n in modes.most_common()))
         out.append("")
 
-    out.append("Failing tests:")
-    out.extend(_failure_lines(target["failures"], window_len, limit=200))
+    # Divide the trace budget across the rendered failures so the whole section
+    # fits Serge's context limit while still carrying real detail per test.
+    failures = target["failures"]
+    rendered = min(len(failures), _FULL_TRACE_LIMIT)
+    per_failure = min(trace_chars, max(600, _SERGE_TRACE_BUDGET // max(1, rendered)))
+    out.append("Failing tests (with the actual-vs-expected detail from the CI trace):")
+    out.extend(_failure_lines(failures, window_len, limit=_FULL_TRACE_LIMIT, trace_chars=per_failure))
     out.append("")
 
     if c and c.get("failure_excerpt"):
@@ -554,7 +613,9 @@ def _render_serge_target(target: dict, window_len: int) -> list[str]:
     return out
 
 
-def render_serge_context(targets: list[dict], window: list[str]) -> str:
+def render_serge_context(
+    targets: list[dict], window: list[str], trace_chars: int = _DEFAULT_TRACE_CHARS
+) -> str:
     """The untrusted failure report Serge receives as `context`.
 
     Usually called with a single group (the dispatcher fans out one task per
@@ -580,7 +641,7 @@ def render_serge_context(targets: list[dict], window: list[str]) -> str:
     for idx, target in enumerate(targets, start=1):
         out.append(f"## Serge candidate failure group {idx}/{total}: {target['label']}")
         out.append("")
-        out.extend(_render_serge_target(target, len(window)))
+        out.extend(_render_serge_target(target, len(window), trace_chars=trace_chars))
         out.append("")
     return "\n".join(out).rstrip()
 
@@ -625,16 +686,29 @@ def task_branch_prefix(fingerprint: str) -> str:
     return f"serge/fix/itf-{fingerprint[:12]}"
 
 
-def add_state_marker(context: str, fingerprint: str) -> str:
-    return "\n".join(
-        [
-            fingerprint_marker(fingerprint),
-            f"Serge task fingerprint: `{fingerprint}`.",
-            "If you open or update a PR for this task, keep the HTML comment above in the PR body.",
-            "",
-            context,
-        ]
-    )
+def add_state_marker(context: str, fingerprint: str, issue_number: int | None = None) -> str:
+    lines = [
+        fingerprint_marker(fingerprint),
+        f"Serge task fingerprint: `{fingerprint}`.",
+        "If you open or update a PR for this task, keep the HTML comment above in the PR body.",
+    ]
+    if issue_number is not None:
+        lines.append(
+            f"Also include the line `Relates to #{issue_number}` in the PR body so the PR "
+            "links back to the nightly triage tracking issue."
+        )
+    lines += ["", context]
+    return "\n".join(lines)
+
+
+def _gh_headers(github_token: str | None) -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+    return headers
 
 
 def list_open_pulls(repo: str, github_token: str | None) -> list[dict]:
@@ -644,12 +718,7 @@ def list_open_pulls(repo: str, github_token: str | None) -> list[dict]:
     if "/" not in repo:
         return []
     owner, name = repo.split("/", 1)
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if github_token:
-        headers["Authorization"] = f"Bearer {github_token}"
+    headers = _gh_headers(github_token)
 
     pulls_all: list[dict] = []
     page = 1
@@ -689,6 +758,98 @@ def match_existing_pr(pulls: list[dict], fingerprint: str) -> int | None:
 def find_open_task_pr(repo: str, fingerprint: str, github_token: str | None) -> int | None:
     """Find an open Serge PR for this fingerprint using GitHub as state."""
     return match_existing_pr(list_open_pulls(repo, github_token), fingerprint)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-run tracking issue — one issue lists every dispatched group; the PRs
+# Serge opens cross-link back to it via a `Relates to #N` line in their bodies.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def tracking_issue_marker(run_key: str) -> str:
+    return f"<!-- serge-triage-run:{_STATE_SOURCE}:{run_key} -->"
+
+
+def render_tracking_issue_body(targets: list[dict], window: list[str], run_key: str) -> str:
+    win = f"{window[0]} → {window[-1]}" if window else "?"
+    lines = [
+        tracking_issue_marker(run_key),
+        "",
+        f"Automated **integration-failure triage** for the daily CI window `{win}`.",
+        "",
+        "Serge dispatched one task per failure group below — each opens or updates its own "
+        "PR on a `serge/fix/itf-<fingerprint>` branch. PRs cross-link to this issue as they "
+        "open (each carries a `Relates to #` back-reference in its body).",
+        "",
+        "## Dispatched failure groups",
+    ]
+    for idx, target in enumerate(targets, start=1):
+        fp = target_fingerprint(target)
+        lines.append(f"{idx}. {target['label']} — branch `{task_branch_prefix(fp)}` (fp `{fp[:12]}`)")
+    lines += [
+        "",
+        f"_Generated {datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()}._",
+    ]
+    return "\n".join(lines)
+
+
+def _find_open_tracking_issue(repo: str, run_key: str, github_token: str | None) -> int | None:
+    """Open issue carrying this run's marker, if any. The issues endpoint also
+    lists PRs, so skip anything with a ``pull_request`` field."""
+    owner, name = repo.split("/", 1)
+    marker = tracking_issue_marker(run_key)
+    headers = _gh_headers(github_token)
+    page = 1
+    while True:
+        params = urllib.parse.urlencode({"state": "open", "per_page": 100, "page": page})
+        url = f"https://api.github.com/repos/{owner}/{name}/issues?{params}"
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            items = json.loads(resp.read().decode("utf-8"))
+        if not items:
+            return None
+        for it in items:
+            if it.get("pull_request"):
+                continue
+            if marker in (it.get("body") or ""):
+                return int(it["number"])
+        page += 1
+
+
+def ensure_tracking_issue(
+    repo: str, run_key: str, title: str, body: str, github_token: str | None
+) -> int | None:
+    """Find-or-create the per-run tracking issue and return its number.
+
+    Best-effort: needs a token and ``issues: write``; any GitHub error returns
+    None and the run proceeds without an issue (PRs still get opened)."""
+    if "/" not in repo or not github_token:
+        return None
+    owner, name = repo.split("/", 1)
+    try:
+        existing = _find_open_tracking_issue(repo, run_key, github_token)
+        if existing is not None:
+            url = f"https://api.github.com/repos/{owner}/{name}/issues/{existing}"
+            data = json.dumps({"body": body}).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=data, method="PATCH",
+                headers={**_gh_headers(github_token), "Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=30):
+                pass
+            return existing
+        url = f"https://api.github.com/repos/{owner}/{name}/issues"
+        data = json.dumps({"title": title, "body": body}).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data, method="POST",
+            headers={**_gh_headers(github_token), "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return int(json.loads(resp.read().decode("utf-8"))["number"])
+    except (urllib.error.HTTPError, urllib.error.URLError) as e:
+        reason = getattr(e, "reason", e)
+        print(f"      warning: could not create/update tracking issue: {reason}", flush=True)
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -789,6 +950,8 @@ def dispatch_targets(
     window: list[str],
     timeout: int,
     github_token: str | None,
+    trace_chars: int = _DEFAULT_TRACE_CHARS,
+    issue_number: int | None = None,
 ) -> tuple[int, int]:
     """Dispatch one Serge task per failure group — one PR per group — so a
     single run iterates over every group instead of fixing only the first.
@@ -797,13 +960,18 @@ def dispatch_targets(
     runs it on its own task pool, so this just fires the fan-out and reports
     what was accepted. Open PRs are listed once and matched in-memory, so a
     group that already has a Serge PR gets a follow-up rather than a duplicate.
-    Returns ``(accepted, failed)``."""
+    When ``issue_number`` is set, each task is told to back-reference that
+    tracking issue from its PR. Returns ``(accepted, failed)``."""
     pulls = list_open_pulls(repo, github_token)
     accepted = failed = 0
     total = len(targets)
     for idx, target in enumerate(targets, start=1):
         fingerprint = target_fingerprint(target)
-        context = add_state_marker(render_serge_context([target], window), fingerprint)
+        context = add_state_marker(
+            render_serge_context([target], window, trace_chars=trace_chars),
+            fingerprint,
+            issue_number=issue_number,
+        )
         title = f"Fix {target['label']}"[:120]
         existing_pr = match_existing_pr(pulls, fingerprint)
         where = f"follow-up on PR #{existing_pr}" if existing_pr else "new PR"
@@ -852,6 +1020,12 @@ def main(argv: list[str] | None = None) -> int:
         default=int(os.environ.get("ITF_MAX_GROUPS", "20")),
         help="cap how many ordered failure groups are dispatched to Serge (0 = no cap)",
     )
+    p.add_argument(
+        "--trace-chars",
+        type=int,
+        default=int(os.environ.get("ITF_TRACE_CHARS", str(_DEFAULT_TRACE_CHARS))),
+        help="max chars of CI-trace tail (actual-vs-expected detail) per failing test in the Serge context",
+    )
     p.add_argument("--report-out", help="write the full Markdown report to this path")
     p.add_argument("--dry-run", action="store_true", help="compute + print everything but POST nothing to Serge")
     args = p.parse_args(argv)
@@ -898,15 +1072,23 @@ def main(argv: list[str] | None = None) -> int:
         flush=True,
     )
 
+    run_key = window[-1] if window else "unknown"
+    issue_title = f"Nightly integration-failure triage — {run_key}"
+    issue_body = render_tracking_issue_body(targets, window, run_key)
+
     if args.dry_run:
         for idx, target in enumerate(targets, start=1):
             print(f"  [{idx}/{len(targets)}] {target_fingerprint(target)[:12]}  {target['label']}", flush=True)
         sample = targets[0]
         fp = target_fingerprint(sample)
-        context = add_state_marker(render_serge_context([sample], window), fp)
+        context = add_state_marker(
+            render_serge_context([sample], window, trace_chars=args.trace_chars), fp, issue_number=0
+        )
         payload = build_task_payload(
             args.repo, args.base_ref, context, f"Fix {sample['label']}"[:120], fingerprint=fp
         )
+        print(f"\n--- DRY RUN: tracking issue '{issue_title}' ---", flush=True)
+        print(issue_body, flush=True)
         print("\n--- DRY RUN: sample Serge POST /tasks payload (group 1/N) ---", flush=True)
         print(json.dumps(payload, indent=2), flush=True)
         print("\n--- sample context (untrusted, fed to Serge) ---\n" + context, flush=True)
@@ -920,6 +1102,14 @@ def main(argv: list[str] | None = None) -> int:
         print("error: SERGE_OIDC_TOKEN env var is required unless --dry-run", file=sys.stderr)
         return 2
 
+    issue_number = ensure_tracking_issue(
+        args.repo, run_key, issue_title, issue_body, os.environ.get("GITHUB_TOKEN")
+    )
+    if issue_number is not None:
+        print(f"      tracking issue #{issue_number}; PRs will back-reference it", flush=True)
+    else:
+        print("      no tracking issue (missing token/permission or API error); continuing", flush=True)
+
     accepted, failed = dispatch_targets(
         targets,
         repo=args.repo,
@@ -929,6 +1119,8 @@ def main(argv: list[str] | None = None) -> int:
         window=window,
         timeout=args.serge_timeout,
         github_token=os.environ.get("GITHUB_TOKEN"),
+        trace_chars=args.trace_chars,
+        issue_number=issue_number,
     )
     print(
         f"      dispatched {accepted}/{len(targets)} group(s) to Serge"

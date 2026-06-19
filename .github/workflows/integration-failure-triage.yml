@@ -19,6 +19,7 @@ on:
 permissions:
   contents: read
   pull-requests: read # required to find an existing Serge task PR for the same failure fingerprint
+  issues: write       # required to open/update the per-run tracking issue that PRs link back to
   id-token: write   # required to mint the GitHub Actions OIDC token for Serge
 
 jobs:

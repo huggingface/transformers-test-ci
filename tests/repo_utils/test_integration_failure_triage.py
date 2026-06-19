@@ -142,6 +142,37 @@ class PickTargetsGroupingTest(unittest.TestCase):
         self.assertEqual(len(fps), 2)
 
 
+class TraceExcerptTest(unittest.TestCase):
+    def test_short_trace_kept_whole(self):
+        trace = "line1\nAssertionError: Lists differ: ['a'] != ['b']"
+        self.assertEqual(itf.trace_excerpt(trace, 2500), trace)
+
+    def test_long_trace_keeps_tail_with_ellipsis(self):
+        trace = "HEAD\n" + ("filler\n" * 300) + "AssertionError: not close\nMismatched: 3/10"
+        ex = itf.trace_excerpt(trace, 120)
+        self.assertTrue(ex.startswith("…\n"))
+        self.assertIn("Mismatched: 3/10", ex)  # the meaningful tail survives
+        self.assertLessEqual(len(ex), 122)
+
+    def test_empty(self):
+        self.assertEqual(itf.trace_excerpt(""), "")
+
+    def test_context_embeds_full_trace_block(self):
+        trace = "boom\n" + ("x\n" * 200) + "AssertionError: Tensor-likes are not close!\nMismatched elements: 5"
+        target = {
+            "kind": "model_failures", "label": "g", "model": "dac",
+            "failure_mode": "output_mismatch", "cluster": None,
+            "failures": [{
+                "model": "dac", "gpu": "single", "test": "t::DacIntegrationTest::a",
+                "trace": trace, "latest_trace": trace, "days_seen": 6,
+                "failure_mode": "output_mismatch",
+            }],
+        }
+        ctx = itf.render_serge_context([target], ["2026-06-13", "2026-06-19"], trace_chars=2500)
+        self.assertIn("```", ctx)
+        self.assertIn("Mismatched elements: 5", ctx)
+
+
 class MatchExistingPrTest(unittest.TestCase):
     def test_matches_by_fingerprint_marker(self):
         fp = "a" * 64
@@ -237,6 +268,57 @@ class DispatchTargetsTest(unittest.TestCase):
 
         self.assertEqual((accepted, failed), (1, 1))
         self.assertEqual(len(calls), 2)  # second group still attempted
+
+
+class TrackingIssueTest(unittest.TestCase):
+    def _target(self, label="g1", model="a"):
+        return {
+            "kind": "model_failures", "label": label, "model": model,
+            "failure_mode": "output_mismatch", "cluster": None,
+            "failures": [{
+                "model": model, "gpu": "single", "test": f"t::{model}IntegrationTest::a",
+                "trace": "boom", "latest_trace": "boom", "days_seen": 6,
+                "failure_mode": "output_mismatch",
+            }],
+        }
+
+    def test_marker_omitted_without_issue(self):
+        ctx = itf.add_state_marker("body", "f" * 64)
+        self.assertNotIn("Relates to #", ctx)
+
+    def test_marker_includes_relates_to(self):
+        ctx = itf.add_state_marker("body", "f" * 64, issue_number=77)
+        self.assertIn("Relates to #77", ctx)
+
+    def test_issue_body_lists_groups_and_branches(self):
+        targets = [self._target("g1", "a"), self._target("g2", "b")]
+        body = itf.render_tracking_issue_body(targets, ["2026-06-13", "2026-06-19"], "2026-06-19")
+        self.assertIn(itf.tracking_issue_marker("2026-06-19"), body)
+        self.assertIn("g1", body)
+        self.assertIn("g2", body)
+        for t in targets:
+            self.assertIn(itf.task_branch_prefix(itf.target_fingerprint(t)), body)
+
+    def test_ensure_issue_noop_without_token(self):
+        self.assertIsNone(itf.ensure_tracking_issue("o/r", "2026-06-19", "t", "b", None))
+
+    def test_dispatch_injects_issue_backreference(self):
+        sent = []
+
+        def fake_dispatch(serge_url, token, payload, timeout=240):
+            sent.append(payload)
+            return {"id": "j", "url": "/tasks/o/r/j"}
+
+        with (
+            patch.object(itf, "list_open_pulls", return_value=[]),
+            patch.object(itf, "dispatch_to_serge", side_effect=fake_dispatch),
+        ):
+            itf.dispatch_targets(
+                [self._target()], repo="o/r", base_ref="main", serge_url="http://s",
+                token="tok", window=["2026-06-19"], timeout=10, github_token=None,
+                issue_number=123,
+            )
+        self.assertIn("Relates to #123", sent[0]["context"])
 
 
 if __name__ == "__main__":
