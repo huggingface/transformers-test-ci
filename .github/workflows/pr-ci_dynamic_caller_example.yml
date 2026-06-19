@@ -186,7 +186,11 @@ jobs:
 
   check_code_quality:
     name: "Check code quality"
-    runs-on: ubuntu-22.04
+    # Self-hosted so the runner injects OTEL_EXPORTER_OTLP_ENDPOINT / OTEL_TOKEN,
+    # same as the pytest jobs and test-preparation. On GitHub-hosted runners
+    # those are absent and configure-ci-otel now fails (no silent no-op export).
+    runs-on:
+      group: aws-m8i-2xl-cache
     container:
       image: huggingface/transformers-quality
     env:
@@ -256,7 +260,11 @@ jobs:
 
   check_repository_consistency:
     name: "Check repository consistency"
-    runs-on: ubuntu-22.04
+    # Self-hosted so the runner injects OTEL_EXPORTER_OTLP_ENDPOINT / OTEL_TOKEN,
+    # same as the pytest jobs and test-preparation. On GitHub-hosted runners
+    # those are absent and configure-ci-otel now fails (no silent no-op export).
+    runs-on:
+      group: aws-m8i-2xl-cache
     container:
       image: huggingface/transformers-consistency
     env:
