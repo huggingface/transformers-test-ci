@@ -61,7 +61,7 @@ jobs:
             --report-out triage-report.md \
             $DRY_RUN_ARG
         env:
-          SERGE_URL: ${{ vars.SERGE_URL || 'http://10.90.52.50:8080' }}
+          SERGE_URL: ${{ vars.SERGE_URL || 'https://serge.huggingface.tech' }}
           SERGE_TIMEOUT: ${{ vars.SERGE_TIMEOUT || '240' }}
           SERGE_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
           GITHUB_TOKEN: ${{ github.token }}
