@@ -99,6 +99,9 @@ class Glm46VModel(Glm4vModel):
         self.visual = AutoModel.from_config(config.vision_config)
         self.language_model = AutoModel.from_config(config.text_config)
 
+    def get_input_embeddings(self):
+        return self.language_model.get_input_embeddings()
+
 
 class Glm46VForConditionalGeneration(Glm4vForConditionalGeneration):
     pass
