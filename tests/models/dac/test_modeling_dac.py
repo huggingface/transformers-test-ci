@@ -36,6 +36,7 @@ from ...test_pipeline_mixin import PipelineTesterMixin
 
 if is_torch_available():
     import torch
+    torch.set_float32_matmul_precision("highest")
 
 
 @require_torch
