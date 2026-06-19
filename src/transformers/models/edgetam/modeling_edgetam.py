@@ -1219,6 +1219,10 @@ class EdgeTamModel(EdgeTamPreTrainedModel):
         pixel_values (`torch.FloatTensor`):
             Input pixel values of shape `(batch_size, num_channels, height, width)`.
         """
+        # Remove processor metadata before it reaches the timm backbone.
+        kwargs.pop("original_sizes", None)
+        kwargs.pop("reshaped_input_sizes", None)
+
         vision_outputs: EdgeTamVisionEncoderOutput = self.vision_encoder(pixel_values, return_dict=True, **kwargs)
 
         feature_maps = vision_outputs.fpn_hidden_states
