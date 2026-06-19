@@ -14,6 +14,7 @@
 
 
 import numpy as np
+import torch
 from huggingface_hub.dataclasses import strict
 
 from ...configuration_utils import PreTrainedConfig
@@ -98,6 +99,12 @@ class Glm46VModel(Glm4vModel):
         super().__init__(config)
         self.visual = AutoModel.from_config(config.vision_config)
         self.language_model = AutoModel.from_config(config.text_config)
+
+    def forward(self, input_ids=None, inputs_embeds=None, **kwargs):
+        # Some generation paths pass input_ids with the model's floating dtype; cast back to long for embedding lookup
+        if input_ids is not None and input_ids.dtype not in (torch.int, torch.long):
+            input_ids = input_ids.long()
+        return super().forward(input_ids=input_ids, inputs_embeds=inputs_embeds, **kwargs)
 
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
