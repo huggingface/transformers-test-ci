@@ -290,12 +290,15 @@ class TrackingIssueTest(unittest.TestCase):
         ctx = itf.add_state_marker("body", "f" * 64, issue_number=77)
         self.assertIn("Relates to #77", ctx)
 
-    def test_issue_body_lists_groups_and_branches(self):
-        targets = [self._target("g1", "a"), self._target("g2", "b")]
+    def test_issue_body_renders_table(self):
+        targets = [self._target("g1", "alpha"), self._target("g2", "beta")]
         body = itf.render_tracking_issue_body(targets, ["2026-06-13", "2026-06-19"], "2026-06-19")
         self.assertIn(itf.tracking_issue_marker("2026-06-19"), body)
-        self.assertIn("g1", body)
-        self.assertIn("g2", body)
+        self.assertIn("| Model | Error | Occurrences | PR |", body)
+        self.assertIn("| --- | --- | --- | --- |", body)
+        self.assertIn("`alpha`", body)
+        self.assertIn("`beta`", body)
+        # pending groups show their branch in the PR column
         for t in targets:
             self.assertIn(itf.task_branch_prefix(itf.target_fingerprint(t)), body)
 
@@ -306,7 +309,7 @@ class TrackingIssueTest(unittest.TestCase):
         body = itf.render_tracking_issue_body(
             targets, ["2026-06-19"], "2026-06-19", existing_prs={fp0: 62, fp1: None}
         )
-        self.assertIn("PR #62", body)  # follow-up group links its PR directly
+        self.assertIn("#62", body)  # follow-up group links its PR directly
         self.assertIn(itf.task_branch_prefix(fp1), body)  # new-PR group shows branch
 
     def test_resolve_existing_prs(self):

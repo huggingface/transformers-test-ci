@@ -317,6 +317,13 @@ def failure_signature(trace: str) -> str:
     return m.group(1) if m else "other"
 
 
+def signature_summary(failures: list[dict]) -> str:
+    """``"tensor values differ (6), other (2)"`` — the signature mix across a
+    group's failures, most common first."""
+    sigs = Counter(failure_signature(f.get("latest_trace") or f.get("trace") or "") for f in failures)
+    return ", ".join(f"{s} ({n})" for s, n in sigs.most_common())
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Cluster — join CI bisect attribution and group by bad_commit.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -463,10 +470,7 @@ def pick_targets(report: dict) -> list[dict]:
 
     model_groups: list[dict] = []
     for (model, mode), items in by_model_mode.items():
-        sigs = Counter(
-            failure_signature(f.get("latest_trace") or f.get("trace") or "") for f in items
-        )
-        sig_str = ", ".join(f"{s} ({n})" for s, n in sigs.most_common())
+        sig_str = signature_summary(items)
         n = len(items)
         model_groups.append(
             {
@@ -800,17 +804,35 @@ def render_tracking_issue_body(
         "it directly; brand-new PRs are opened asynchronously and get linked on the next run.",
         "",
         "## Dispatched failure groups",
+        "",
+        "| Model | Error | Occurrences | PR |",
+        "| --- | --- | --- | --- |",
     ]
-    for idx, target in enumerate(targets, start=1):
+    for target in targets:
         fp = target_fingerprint(target)
+        if target.get("model"):
+            model_cell = f"`{target['model']}`"
+        elif target.get("cluster"):
+            model_cell = f"cluster `{target['cluster']['bad_commit'][:12]}`"
+        else:
+            model_cell = "—"
+        summary = signature_summary(target["failures"])
+        mode = target.get("failure_mode") or "mixed"
+        error_cell = f"{mode} — {summary}" if summary else mode
         pr = existing_prs.get(fp)
-        where = f"PR #{pr}" if pr else f"branch `{task_branch_prefix(fp)}` (new PR pending)"
-        lines.append(f"{idx}. {target['label']} — {where} (fp `{fp[:12]}`)")
+        pr_cell = f"#{pr}" if pr else f"`{task_branch_prefix(fp)}` (pending)"
+        cells = [model_cell, error_cell, str(len(target["failures"])), pr_cell]
+        lines.append("| " + " | ".join(_md_cell(c) for c in cells) + " |")
     lines += [
         "",
         f"_Generated {datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()}._",
     ]
     return "\n".join(lines)
+
+
+def _md_cell(text: str) -> str:
+    """Make a string safe inside a Markdown table cell (no pipes / newlines)."""
+    return text.replace("|", "\\|").replace("\n", " ").strip()
 
 
 def _find_open_tracking_issue(repo: str, run_key: str, github_token: str | None) -> int | None:
