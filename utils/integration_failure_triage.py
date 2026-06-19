@@ -27,7 +27,9 @@ Run daily (e.g. from a GitHub Actions cron). This script:
      cuda_runtime, load_error, import_or_config, other) and joins the latest
      day's CI ``git bisect`` attribution to cluster failures by ``bad_commit``.
   4. Orders failure groups by likely impact — bad-commit clusters first,
-     followed by unpinned/flaky failures grouped by failure mode.
+     followed by unpinned/flaky failures grouped by ``(model, failure mode)``
+     so each dispatched group is a single coherent fix unit (one model, one
+     kind of failure) rather than a giant cross-model bucket Serge can't fix.
   5. Renders a Markdown report and hands the ordered failure groups to
      **Serge** (``POST /tasks``), which opens a PR proposing a fix. Serge runs
      no tests; verification stays in CI.
@@ -258,6 +260,32 @@ def short_excerpt(trace: str, max_chars: int = 240) -> str:
     return ""
 
 
+# A finer "what does the failure look like" signature than the coarse mode.
+# Used to describe (not split) a model group so Serge sees the dominant
+# symptom — e.g. tensors drifting vs. decoded text changing need different
+# expected-value updates even though both are `output_mismatch`.
+_SIGNATURE_PATS = (
+    ("tensor values differ", re.compile(r"Tensor-likes are not (?:close|equal)", re.IGNORECASE)),
+    ("list output differs", re.compile(r"Lists? differ", re.IGNORECASE)),
+    ("tuple output differs", re.compile(r"Tuples? differ", re.IGNORECASE)),
+    ("dict output differs", re.compile(r"Dicts? differ", re.IGNORECASE)),
+    ("value not almost equal", re.compile(r"not almost equal|AlmostEqual", re.IGNORECASE)),
+    ("shape/size mismatch", re.compile(r"shape mismatch|size mismatch|must match the size", re.IGNORECASE)),
+)
+
+
+def failure_signature(trace: str) -> str:
+    """Coarse symptom label for one failure (a sub-mode), e.g. ``tensor values
+    differ``. Falls back to the leading exception type, then ``other``."""
+    if not trace:
+        return "unknown"
+    for label, pat in _SIGNATURE_PATS:
+        if pat.search(trace):
+            return label
+    m = re.match(r"([A-Za-z_]+Error)", short_excerpt(trace))
+    return m.group(1) if m else "other"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Cluster — join CI bisect attribution and group by bad_commit.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -361,16 +389,22 @@ def pick_targets(report: dict) -> list[dict]:
     """Return ordered failure groups to hand to Serge.
 
     Primary candidates are bad-commit clusters, already sorted by number of
-    failures. Fallback candidates are non-clustered failures grouped by coarse
-    failure mode, sorted by size.
+    failures. Fallback candidates are the unattributed/flaky failures grouped
+    by **(model, failure mode)** — a single coherent fix unit (one model, one
+    kind of failure) — sorted by size. This deliberately avoids the old
+    group-by-failure-mode behavior, which produced one giant cross-model
+    ``output_mismatch`` bucket that no single minimal PR could ever resolve;
+    Serge would inspect it, find heterogeneous root causes, and always no-op.
 
     Each item is a normalized descriptor::
 
         {
-          "kind": "cluster" | "failure_mode",
+          "kind": "cluster" | "model_failures",
           "label": "...",            # human summary
           "failures": [...],         # the member failures
           "cluster": {...} | None,   # cluster meta when kind == "cluster"
+          "model": "..." | None,     # set when kind == "model_failures"
+          "failure_mode": "..." | None,
         }
     """
     targets: list[dict] = []
@@ -386,22 +420,39 @@ def pick_targets(report: dict) -> list[dict]:
                 ),
                 "failures": c["failures"],
                 "cluster": c,
+                "model": None,
+                "failure_mode": None,
             }
         )
 
     pool = list(report.get("unpinned") or []) + list(report.get("flaky") or [])
-    by_mode: dict[str, list[dict]] = defaultdict(list)
+    by_model_mode: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for f in pool:
-        by_mode[f.get("failure_mode") or "other"].append(f)
-    for mode, items in sorted(by_mode.items(), key=lambda kv: (-len(kv[1]), kv[0])):
-        targets.append(
+        by_model_mode[(f["model"], f.get("failure_mode") or "other")].append(f)
+
+    model_groups: list[dict] = []
+    for (model, mode), items in by_model_mode.items():
+        sigs = Counter(
+            failure_signature(f.get("latest_trace") or f.get("trace") or "") for f in items
+        )
+        sig_str = ", ".join(f"{s} ({n})" for s, n in sigs.most_common())
+        n = len(items)
+        model_groups.append(
             {
-                "kind": "failure_mode",
-                "label": f"{len(items)} unattributed integration tests sharing failure mode `{mode}`",
+                "kind": "model_failures",
+                "label": (
+                    f"{n} integration test{'s' if n != 1 else ''} for model `{model}` "
+                    f"failing with `{mode}` ({sig_str})"
+                ),
                 "failures": items,
                 "cluster": None,
+                "model": model,
+                "failure_mode": mode,
             }
         )
+    # Largest coherent per-model groups first; stable tie-break on name/mode.
+    model_groups.sort(key=lambda t: (-len(t["failures"]), t["model"], t["failure_mode"]))
+    targets.extend(model_groups)
     return targets
 
 
@@ -697,6 +748,12 @@ def main(argv: list[str] | None = None) -> int:
         default=int(os.environ.get("SERGE_TIMEOUT", "240")),
         help="seconds to wait for Serge to accept the task",
     )
+    p.add_argument(
+        "--max-groups",
+        type=int,
+        default=int(os.environ.get("ITF_MAX_GROUPS", "20")),
+        help="cap how many ordered failure groups are dispatched to Serge (0 = no cap)",
+    )
     p.add_argument("--report-out", help="write the full Markdown report to this path")
     p.add_argument("--dry-run", action="store_true", help="compute + print everything but POST nothing to Serge")
     args = p.parse_args(argv)
@@ -718,6 +775,14 @@ def main(argv: list[str] | None = None) -> int:
     nf_latest = daily[max(daily)].get("new_failures")
     report = cluster_failures(kept, nf_latest)
     targets = pick_targets(report)
+    if args.max_groups and len(targets) > args.max_groups:
+        dropped = len(targets) - args.max_groups
+        print(
+            f"      note: {len(targets)} group(s) found; dispatching the top "
+            f"{args.max_groups}, dropping {dropped} lower-priority group(s) this run",
+            flush=True,
+        )
+        targets = targets[: args.max_groups]
 
     report_md = render_report(report, targets, window)
     if args.report_out:
