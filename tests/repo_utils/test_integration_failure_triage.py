@@ -299,6 +299,24 @@ class TrackingIssueTest(unittest.TestCase):
         for t in targets:
             self.assertIn(itf.task_branch_prefix(itf.target_fingerprint(t)), body)
 
+    def test_issue_body_links_existing_pr_inline(self):
+        targets = [self._target("g1", "a"), self._target("g2", "b")]
+        fp0 = itf.target_fingerprint(targets[0])
+        fp1 = itf.target_fingerprint(targets[1])
+        body = itf.render_tracking_issue_body(
+            targets, ["2026-06-19"], "2026-06-19", existing_prs={fp0: 62, fp1: None}
+        )
+        self.assertIn("PR #62", body)  # follow-up group links its PR directly
+        self.assertIn(itf.task_branch_prefix(fp1), body)  # new-PR group shows branch
+
+    def test_resolve_existing_prs(self):
+        targets = [self._target("g1", "a"), self._target("g2", "b")]
+        fp0 = itf.target_fingerprint(targets[0])
+        pulls = [{"number": 62, "body": itf.fingerprint_marker(fp0), "head": {"ref": "x"}}]
+        resolved = itf.resolve_existing_prs(targets, pulls)
+        self.assertEqual(resolved[fp0], 62)
+        self.assertIsNone(resolved[itf.target_fingerprint(targets[1])])
+
     def test_ensure_issue_noop_without_token(self):
         self.assertIsNone(itf.ensure_tracking_issue("o/r", "2026-06-19", "t", "b", None))
 

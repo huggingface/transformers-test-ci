@@ -760,6 +760,12 @@ def find_open_task_pr(repo: str, fingerprint: str, github_token: str | None) -> 
     return match_existing_pr(list_open_pulls(repo, github_token), fingerprint)
 
 
+def resolve_existing_prs(targets: list[dict], pulls: list[dict]) -> dict[str, int | None]:
+    """Map each target's fingerprint to its open Serge PR number (or None),
+    matched against an already-fetched ``pulls`` list."""
+    return {(fp := target_fingerprint(t)): match_existing_pr(pulls, fp) for t in targets}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-run tracking issue — one issue lists every dispatched group; the PRs
 # Serge opens cross-link back to it via a `Relates to #N` line in their bodies.
@@ -770,7 +776,19 @@ def tracking_issue_marker(run_key: str) -> str:
     return f"<!-- serge-triage-run:{_STATE_SOURCE}:{run_key} -->"
 
 
-def render_tracking_issue_body(targets: list[dict], window: list[str], run_key: str) -> str:
+def render_tracking_issue_body(
+    targets: list[dict],
+    window: list[str],
+    run_key: str,
+    existing_prs: dict[str, int | None] | None = None,
+) -> str:
+    """Markdown body for the per-run tracking issue. When a group already has an
+    open Serge PR (a follow-up), its number is written inline as ``#<pr>`` — that
+    both renders as a link here and registers a cross-reference on the PR, so the
+    issue links the PRs directly rather than relying on the PR body. Groups whose
+    PR Serge opens asynchronously show their branch until a later run resolves
+    the number (a follow-up next time)."""
+    existing_prs = existing_prs or {}
     win = f"{window[0]} → {window[-1]}" if window else "?"
     lines = [
         tracking_issue_marker(run_key),
@@ -778,14 +796,16 @@ def render_tracking_issue_body(targets: list[dict], window: list[str], run_key: 
         f"Automated **integration-failure triage** for the daily CI window `{win}`.",
         "",
         "Serge dispatched one task per failure group below — each opens or updates its own "
-        "PR on a `serge/fix/itf-<fingerprint>` branch. PRs cross-link to this issue as they "
-        "open (each carries a `Relates to #` back-reference in its body).",
+        "PR on a `serge/fix/itf-<fingerprint>` branch. Groups that already had a PR link to "
+        "it directly; brand-new PRs are opened asynchronously and get linked on the next run.",
         "",
         "## Dispatched failure groups",
     ]
     for idx, target in enumerate(targets, start=1):
         fp = target_fingerprint(target)
-        lines.append(f"{idx}. {target['label']} — branch `{task_branch_prefix(fp)}` (fp `{fp[:12]}`)")
+        pr = existing_prs.get(fp)
+        where = f"PR #{pr}" if pr else f"branch `{task_branch_prefix(fp)}` (new PR pending)"
+        lines.append(f"{idx}. {target['label']} — {where} (fp `{fp[:12]}`)")
     lines += [
         "",
         f"_Generated {datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()}._",
@@ -952,17 +972,19 @@ def dispatch_targets(
     github_token: str | None,
     trace_chars: int = _DEFAULT_TRACE_CHARS,
     issue_number: int | None = None,
+    existing_prs: dict[str, int | None] | None = None,
 ) -> tuple[int, int]:
     """Dispatch one Serge task per failure group — one PR per group — so a
     single run iterates over every group instead of fixing only the first.
 
     Each ``POST /tasks`` returns immediately (202); Serge queues the work and
     runs it on its own task pool, so this just fires the fan-out and reports
-    what was accepted. Open PRs are listed once and matched in-memory, so a
-    group that already has a Serge PR gets a follow-up rather than a duplicate.
-    When ``issue_number`` is set, each task is told to back-reference that
-    tracking issue from its PR. Returns ``(accepted, failed)``."""
-    pulls = list_open_pulls(repo, github_token)
+    what was accepted. ``existing_prs`` maps fingerprint → open PR number (so a
+    group that already has a Serge PR gets a follow-up rather than a duplicate);
+    if omitted it is computed here. When ``issue_number`` is set, each task is
+    told to back-reference that tracking issue. Returns ``(accepted, failed)``."""
+    if existing_prs is None:
+        existing_prs = resolve_existing_prs(targets, list_open_pulls(repo, github_token))
     accepted = failed = 0
     total = len(targets)
     for idx, target in enumerate(targets, start=1):
@@ -973,7 +995,7 @@ def dispatch_targets(
             issue_number=issue_number,
         )
         title = f"Fix {target['label']}"[:120]
-        existing_pr = match_existing_pr(pulls, fingerprint)
+        existing_pr = existing_prs.get(fingerprint)
         where = f"follow-up on PR #{existing_pr}" if existing_pr else "new PR"
         print(f"  [{idx}/{total}] {target['label']}", flush=True)
         print(f"        fingerprint {fingerprint[:12]} → {where}", flush=True)
@@ -1072,9 +1094,15 @@ def main(argv: list[str] | None = None) -> int:
         flush=True,
     )
 
+    # Look up open Serge PRs once: feeds both the tracking-issue links and the
+    # follow-up-vs-new-PR decision in dispatch, so a group's existing PR shows
+    # as a real #number in the issue immediately.
+    gh_token = os.environ.get("GITHUB_TOKEN")
+    existing_prs = resolve_existing_prs(targets, list_open_pulls(args.repo, gh_token))
+
     run_key = window[-1] if window else "unknown"
     issue_title = f"Nightly integration-failure triage — {run_key}"
-    issue_body = render_tracking_issue_body(targets, window, run_key)
+    issue_body = render_tracking_issue_body(targets, window, run_key, existing_prs)
 
     if args.dry_run:
         for idx, target in enumerate(targets, start=1):
@@ -1103,10 +1131,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     issue_number = ensure_tracking_issue(
-        args.repo, run_key, issue_title, issue_body, os.environ.get("GITHUB_TOKEN")
+        args.repo, run_key, issue_title, issue_body, gh_token
     )
     if issue_number is not None:
-        print(f"      tracking issue #{issue_number}; PRs will back-reference it", flush=True)
+        linked = sum(1 for v in existing_prs.values() if v)
+        print(
+            f"      tracking issue #{issue_number}; {linked} existing PR(s) linked, "
+            "new PRs link on the next run",
+            flush=True,
+        )
     else:
         print("      no tracking issue (missing token/permission or API error); continuing", flush=True)
 
@@ -1118,8 +1151,9 @@ def main(argv: list[str] | None = None) -> int:
         token=token,
         window=window,
         timeout=args.serge_timeout,
-        github_token=os.environ.get("GITHUB_TOKEN"),
+        github_token=gh_token,
         trace_chars=args.trace_chars,
+        existing_prs=existing_prs,
         issue_number=issue_number,
     )
     print(
