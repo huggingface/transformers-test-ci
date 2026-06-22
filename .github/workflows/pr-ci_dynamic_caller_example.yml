@@ -36,7 +36,7 @@ jobs:
   test-preparation:
     name: "Test preparation (fetcher)"
     runs-on:
-      group: aws-m8i-2xl-cache
+      group: aws-m8i-l-cache
 
     container:
       image: huggingface/transformers-quality
@@ -190,7 +190,7 @@ jobs:
     # same as the pytest jobs and test-preparation. On GitHub-hosted runners
     # those are absent and configure-ci-otel now fails (no silent no-op export).
     runs-on:
-      group: aws-m8i-2xl-cache
+      group: aws-m8i-l-cache
     container:
       image: huggingface/transformers-quality
     env:
@@ -264,7 +264,7 @@ jobs:
     # same as the pytest jobs and test-preparation. On GitHub-hosted runners
     # those are absent and configure-ci-otel now fails (no silent no-op export).
     runs-on:
-      group: aws-m8i-2xl-cache
+      group: aws-m8i-l-cache
     container:
       image: huggingface/transformers-consistency
     env:
