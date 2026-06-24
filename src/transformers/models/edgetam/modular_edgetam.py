@@ -210,6 +210,10 @@ class EdgeTamVisionModel(Sam2VisionModel):
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
 
+        # Remove processor metadata that the timm backbone cannot accept.
+        kwargs.pop("original_sizes", None)
+        kwargs.pop("reshaped_input_sizes", None)
+
         # Forward through backbone
         backbone_output = self.backbone(pixel_values, **kwargs)
         intermediate_hidden_states = backbone_output.last_hidden_state
@@ -243,6 +247,41 @@ class EdgeTamModel(Sam2Model):
     def get_input_embeddings(self):
         raise NotImplementedError("Can't get input embeddings from timm wrapper model")
 
+    def get_image_features(
+        self,
+        pixel_values: torch.FloatTensor,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> tuple | EdgeTamVisionEncoderOutput:
+        r"""
+        pixel_values (`torch.FloatTensor`):
+            Input pixel values of shape `(batch_size, num_channels, height, width)`.
+        """
+        # Remove processor metadata before it reaches the timm backbone.
+        kwargs.pop("original_sizes", None)
+        kwargs.pop("reshaped_input_sizes", None)
+
+        vision_outputs: EdgeTamVisionEncoderOutput = self.vision_encoder(pixel_values, return_dict=True, **kwargs)
+
+        feature_maps = vision_outputs.fpn_hidden_states
+        feature_maps_position_embeddings = vision_outputs.fpn_position_encoding
+
+        # precompute projected level 0 and level 1 features in SAM decoder
+        # to avoid running it again on every SAM click
+        feature_maps = list(feature_maps)
+        feature_maps[0] = self.mask_decoder.conv_s0(feature_maps[0])
+        feature_maps[1] = self.mask_decoder.conv_s1(feature_maps[1])
+
+        # flatten NxCxHxW to HWxNxC
+        feature_maps = [feature_map.flatten(2).permute(2, 0, 1) for feature_map in feature_maps]
+        feature_maps_position_embeddings = [
+            feature_map_position_embedding.flatten(2).permute(2, 0, 1)
+            for feature_map_position_embedding in feature_maps_position_embeddings
+        ]
+        vision_outputs.fpn_hidden_states = feature_maps
+        vision_outputs.fpn_position_encoding = feature_maps_position_embeddings
+
+        return vision_outputs
+
 
 __all__ = [
     "EdgeTamModel",
@@ -253,3 +292,4 @@ __all__ = [
     "EdgeTamPromptEncoderConfig",
     "EdgeTamMaskDecoderConfig",
 ]
+
