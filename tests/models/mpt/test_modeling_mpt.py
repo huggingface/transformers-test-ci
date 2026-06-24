@@ -425,6 +425,9 @@ class MptModelTest(ModelTesterMixin, GenerationTesterMixin, PipelineTesterMixin,
 
 
 @slow
+@unittest.skip(
+    reason="The upstream mosaicml/mpt-7b and mosaicml/mpt-7b-8k checkpoints are no longer available on the Hugging Face Hub."
+)
 @require_torch_accelerator
 @require_bitsandbytes
 class MptIntegrationTests(unittest.TestCase):
