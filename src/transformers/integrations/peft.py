@@ -661,6 +661,10 @@ class PeftAdapterMixin:
             weight_mapping=peft_weight_conversions,
             device_map=device_map,
         )
+        # When hotswapping adapters with different ranks, the loaded weights will have mismatched sizes,
+        # so we must ignore size mismatches during loading. This must be set after replace(...) so the flag
+        # is preserved on the config used for loading and reporting.
+        load_config.ignore_mismatched_sizes = load_config.ignore_mismatched_sizes or getattr(self, "_hotswap_enabled", False)
 
         loading_info, _ = self._load_pretrained_model(
             model=self,
