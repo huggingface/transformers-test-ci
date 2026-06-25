@@ -332,7 +332,7 @@ jobs:
     # Maps CircleCIJob.resource_class → self-hosted runner label.
     # NOTE: Adjust label names to match your actual runner fleet configuration.
     runs-on:
-      group: aws-m8i-l-cache
+      group: aws-m8g-l-cache
 
     # ── Container ─────────────────────────────────────────────────────────────
     # Maps CircleCIJob.docker_image (+ use_dev_image hack).
