@@ -126,10 +126,10 @@ on:
           with " && " (single-line) or use a multiline string. The workflow
           always appends the custom pytest fork and pytest-random-order
           installations automatically (mirrors CircleCIJob.__post_init__).
-          Default: "uv pip install ."
+          Default: "uv pip install -e ."
         required: false
         type: string
-        default: "uv pip install ."
+        default: "uv pip install -e ."
 
       # Maps to: CircleCIJob.pytest_options (pre-serialized as CLI flags)
       pytest_extra_options:
@@ -463,10 +463,11 @@ jobs:
       #   - custom pytest fork (ydshieh/pytest@8.4.1-ydshieh)
       #   - pytest-random-order
       - name: Install dependencies
+      # Common dependencies should be installed during docker image build time, e.g. transformers-ci[otel].
+      # For transformers-ci[otel], since any problem in transformers-ci highly impacts the CI flow and we might need to
+      # quickly fix it, let's repeat the installation here.
         run: |
           eval "$INSTALL_STEPS"
-          uv pip install git+https://github.com/ydshieh/pytest.git@8.4.1-ydshieh
-          uv pip install pytest-random-order
           uv pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
         env:
           INSTALL_STEPS: ${{ inputs.install_steps }}

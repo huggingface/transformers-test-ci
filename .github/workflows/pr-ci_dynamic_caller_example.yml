@@ -395,7 +395,7 @@ jobs:
       docker_image:      "huggingface/transformers-torch-light"
       parallelism:       8
       marker:            "generate"
-      install_steps:     "uv pip install ."
+      install_steps:     "uv pip install -e ."
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
     secrets: inherit
 
@@ -462,7 +462,7 @@ jobs:
     with:
       job_name:           "examples_torch"
       docker_image:       "huggingface/transformers-examples-torch"
-      install_steps:      "uv pip install . && uv pip install -r examples/pytorch/_tests_requirements.txt"
+      install_steps:      "uv pip install -e . && uv pip install -r examples/pytorch/_tests_requirements.txt"
       pytest_num_workers: 4
       omp_num_threads:    8
       use_dev_image:      ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
@@ -502,7 +502,7 @@ jobs:
       job_name:          "tests_non_model"
       docker_image:      "huggingface/transformers-torch-light"
       parallelism:       8
-      install_steps:     "uv pip install .[serving]"
+      install_steps:     "uv pip install -e .[serving]"
       marker:            "not generate"
       use_dev_image:     ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
     secrets: inherit
@@ -516,7 +516,7 @@ jobs:
       job_name:            "tests_training_ci"
       docker_image:        "huggingface/transformers-torch-light"
       parallelism:         8
-      install_steps:       "uv pip install ."
+      install_steps:       "uv pip install -e ."
       marker:              "is_training_test"
       run_training_tests:  true
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
@@ -532,7 +532,7 @@ jobs:
       docker_image:        "huggingface/transformers-torch-light"
       parallelism:         8
       pytest_num_workers:  8
-      install_steps:       "uv pip install . && uv pip install torchao"
+      install_steps:       "uv pip install -e . && uv pip install torchao"
       marker:              "is_tensor_parallel_test"
       run_tensor_parallel_tests:  true
       use_dev_image:       ${{ needs.test-preparation.outputs.use_dev_image == 'true' }}
