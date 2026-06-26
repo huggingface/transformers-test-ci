@@ -666,6 +666,38 @@ jobs:
           PYTEST_NUM_WORKERS: ${{ inputs.pytest_num_workers }}
           PYTEST_EXTRA_OPTIONS: ${{ inputs.pytest_extra_options }}
 
+      # ── 15a. Record worker crashes into telemetry ─────────────────────────────
+      # A crashed pytest-xdist worker (OOM/segfault) dies mid-test and emits NO
+      # span, so the failure is invisible on the trace dashboards: the job shows
+      # failed=0 (green) even though it actually failed. When the crash marker is
+      # present, emit a synthetic ERROR span for the crashed test(s) — through
+      # configure-ci-otel so the OTEL resource attributes (run id, job, pr, repo)
+      # match the pytest run that just crashed — so Tempo and every downstream
+      # consumer (dashboard Fail column, /run, /failure, telemetry publisher)
+      # reflect it. report-ci-failure parses the crashed nodeids from
+      # tests_output.txt (job-level fallback when none are found) and is a no-op
+      # when OTEL isn't configured. Never fails the job — the next step does that.
+      - name: Record worker crashes into telemetry
+        if: always()
+        run: |
+          if [ -f tests_output.txt ] && grep -q "crashed and worker restarting disabled" tests_output.txt; then
+            echo "Worker crash detected — recording a synthetic failure span."
+            configure-ci-otel \
+              --suite "${{ inputs.job_name }}" \
+              --service-name "pytest-observability" \
+              --protocol http \
+              --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+              --token "$OTEL_TOKEN" \
+              --staging-endpoint 10.90.52.50:5317 \
+              --staging-protocol grpc \
+              -- report-ci-failure \
+                 --crash-log tests_output.txt \
+                 --message "pytest-xdist worker crashed (likely OOM) in ${{ inputs.job_name }}" \
+              || echo "report-ci-failure: emission failed (non-fatal)"
+          else
+            echo "No worker crash marker in tests_output.txt; nothing to report."
+          fi
+
       # ── 15. Check for worker crashes ──────────────────────────────────────────
       # Maps: "Check for test crashes" step with `when: always`.
       # GHA equivalent: `if: always()`.
