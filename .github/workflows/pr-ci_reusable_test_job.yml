@@ -463,11 +463,14 @@ jobs:
       #   - custom pytest fork (ydshieh/pytest@8.4.1-ydshieh)
       #   - pytest-random-order
       - name: Install dependencies
+      # Common dependencies should be installed during docker image build time, e.g. transformers-ci[otel].
+      # For transformers-ci[otel], since any problem in transformers-ci highly impacts the CI flow and we might need to
+      # quickly fix it, let's repeat the installation here.
         run: |
           eval "$INSTALL_STEPS"
+          uv pip install 'transformers-ci[otel] @ git+https://github.com/huggingface/transformers-ci@main'
         env:
           INSTALL_STEPS: ${{ inputs.install_steps }}
-          # Common dependencies should be installed during docker image build time, e.g. transformers-ci[otel].
 
       # ── 6. NLTK data (examples jobs only) ───────────────────────────────────
       # Maps: {"run": {"name": "Download NLTK files", ...}} with condition
