@@ -666,37 +666,59 @@ jobs:
           PYTEST_NUM_WORKERS: ${{ inputs.pytest_num_workers }}
           PYTEST_EXTRA_OPTIONS: ${{ inputs.pytest_extra_options }}
 
-      # ── 15a. Record worker crashes into telemetry ─────────────────────────────
-      # A crashed pytest-xdist worker (OOM/segfault) dies mid-test and emits NO
-      # span, so the failure is invisible on the trace dashboards: the job shows
-      # failed=0 (green) even though it actually failed. When the crash marker is
-      # present, emit a synthetic ERROR span for the crashed test(s) — through
-      # configure-ci-otel so the OTEL resource attributes (run id, job, pr, repo)
-      # match the pytest run that just crashed — so Tempo and every downstream
-      # consumer (dashboard Fail column, /run, /failure, telemetry publisher)
-      # reflect it. report-ci-failure parses the crashed nodeids from
-      # tests_output.txt (job-level fallback when none are found) and is a no-op
-      # when OTEL isn't configured. Never fails the job — the next step does that.
-      - name: Record worker crashes into telemetry
+      # ── 15a. Record OOM/crash failures into telemetry ─────────────────────────
+      # An OOM leaves no test span, so the failure is invisible on the trace
+      # dashboards (the job shows failed=0 / green though it actually failed).
+      # Two distinct modes, both handled here:
+      #   * worker_crash — an xdist worker died but pytest kept going and printed
+      #     "crashed and worker restarting disabled"; the crashed nodeids are in
+      #     tests_output.txt.
+      #   * oom_killed   — the whole pytest process was SIGKILLed mid-run
+      #     (exit 137): no marker, and pytest never printed a summary line. The
+      #     exact test isn't recoverable from tests_output.txt, so a job-level
+      #     span is recorded.
+      # We emit through configure-ci-otel so the OTEL resource attributes (run id,
+      # job, pr, repo) match the pytest run, and Tempo + every downstream consumer
+      # (dashboard Fail column, /run, /failure, telemetry publisher) reflect it.
+      # report-ci-failure is a no-op when OTEL isn't configured; this step never
+      # fails the job — the crash-check step below does that.
+      - name: Record OOM/crash failures into telemetry
         if: always()
+        env:
+          JOB_NAME: ${{ inputs.job_name }}
+          RUN_TESTS_OUTCOME: ${{ steps.run_tests.outcome }}
         run: |
+          KIND=""
           if [ -f tests_output.txt ] && grep -q "crashed and worker restarting disabled" tests_output.txt; then
-            echo "Worker crash detected — recording a synthetic failure span."
-            configure-ci-otel \
-              --suite "${{ inputs.job_name }}" \
-              --service-name "pytest-observability" \
-              --protocol http \
-              --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
-              --token "$OTEL_TOKEN" \
-              --staging-endpoint 10.90.52.50:5317 \
-              --staging-protocol grpc \
-              -- report-ci-failure \
-                 --crash-log tests_output.txt \
-                 --message "pytest-xdist worker crashed (likely OOM) in ${{ inputs.job_name }}" \
-              || echo "report-ci-failure: emission failed (non-fatal)"
-          else
-            echo "No worker crash marker in tests_output.txt; nothing to report."
+            KIND="worker_crash"
+            MESSAGE="pytest-xdist worker crashed (likely OOM) in ${JOB_NAME}"
+          elif [ "$RUN_TESTS_OUTCOME" = "failure" ] && \
+               ! { [ -f tests_output.txt ] && grep -qE "short test summary info|=+ .*(passed|failed|error|skipped|no tests ran).* in " tests_output.txt; }; then
+            # Run-tests failed but pytest never printed a summary -> the process
+            # was killed mid-run (OOM / exit 137), not a normal test failure.
+            KIND="oom_killed"
+            MESSAGE="pytest process was killed mid-run (likely OOM / exit 137) in ${JOB_NAME}"
           fi
+
+          if [ -z "$KIND" ]; then
+            echo "No OOM/crash signature; nothing to report."
+            exit 0
+          fi
+
+          echo "Detected ${KIND} — recording a synthetic failure span."
+          configure-ci-otel \
+            --suite "${JOB_NAME}" \
+            --service-name "pytest-observability" \
+            --protocol http \
+            --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --token "$OTEL_TOKEN" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
+            -- report-ci-failure \
+               --kind "${KIND}" \
+               --crash-log tests_output.txt \
+               --message "${MESSAGE}" \
+            || echo "report-ci-failure: emission failed (non-fatal)"
 
       # ── 15. Check for worker crashes ──────────────────────────────────────────
       # Maps: "Check for test crashes" step with `when: always`.
