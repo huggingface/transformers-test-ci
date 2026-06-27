@@ -307,6 +307,7 @@ class WhisperAttention(nn.Module):
         # original order of scaling to follow the original implementation
         # and enforce no scaling (1.0) in the attention call below.
         query_states = (self.q_proj(hidden_states) * self.scaling).view(hidden_shape).transpose(1, 2).contiguous()
+        is_updated = False
 
         # Check is encoder-decoder model is being used. Otherwise we'll get `DynamicCache`
         if past_key_values is not None and isinstance(past_key_values, EncoderDecoderCache):
