@@ -247,6 +247,18 @@ jobs:
       # (that flag is pytest-only); the spans come from the in-process tracer.
       - name: Check code quality
         run: |
+          # Mark the job started so it shows on the live dashboards before the
+          # first checker span arrives. report-ci-start emits only a run-start
+          # span (no checker span), so it is discoverable yet counts zero checks.
+          configure-ci-otel \
+            --suite ${{ github.job }} \
+            --service-name "pytest-observability" \
+            --protocol http \
+            --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --token "$OTEL_TOKEN" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
+            -- report-ci-start || echo "OTEL START WARNING report-ci-start is unavailable in this environment"
           configure-ci-otel \
             --suite ${{ github.job }} \
             --service-name "pytest-observability" \
@@ -334,6 +346,18 @@ jobs:
       # under --suite and land on the same dashboards as the pytest jobs.
       - name: Check repository consistency
         run: |
+          # Mark the job started so it shows on the live dashboards before the
+          # first checker span arrives. report-ci-start emits only a run-start
+          # span (no checker span), so it is discoverable yet counts zero checks.
+          configure-ci-otel \
+            --suite ${{ github.job }} \
+            --service-name "pytest-observability" \
+            --protocol http \
+            --otlp-endpoint "$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --token "$OTEL_TOKEN" \
+            --staging-endpoint 10.90.52.50:5317 \
+            --staging-protocol grpc \
+            -- report-ci-start || echo "OTEL START WARNING report-ci-start is unavailable in this environment"
           configure-ci-otel \
             --suite ${{ github.job }} \
             --service-name "pytest-observability" \
