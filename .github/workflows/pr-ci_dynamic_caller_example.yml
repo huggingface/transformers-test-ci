@@ -259,6 +259,7 @@ jobs:
             --staging-endpoint 10.90.52.50:5317 \
             --staging-protocol grpc \
             -- report-ci-start || echo "OTEL START WARNING report-ci-start is unavailable in this environment"
+
           configure-ci-otel \
             --suite ${{ github.job }} \
             --service-name "pytest-observability" \
@@ -358,6 +359,7 @@ jobs:
             --staging-endpoint 10.90.52.50:5317 \
             --staging-protocol grpc \
             -- report-ci-start || echo "OTEL START WARNING report-ci-start is unavailable in this environment"
+
           configure-ci-otel \
             --suite ${{ github.job }} \
             --service-name "pytest-observability" \

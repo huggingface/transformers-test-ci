@@ -637,6 +637,7 @@ jobs:
             --staging-endpoint 10.90.52.50:5317 \
             --staging-protocol grpc \
             --ping-server || echo "OTEL PING WARNING configure-ci-otel --ping-server is unavailable in this environment"
+
           # Emit a run-start span BEFORE pytest so the run/job is visible on the
           # live dashboards immediately, instead of only once the first test span
           # arrives. It carries the same OTEL resource attributes as the pytest
@@ -651,6 +652,7 @@ jobs:
             --staging-endpoint 10.90.52.50:5317 \
             --staging-protocol grpc \
             -- report-ci-start || echo "OTEL START WARNING report-ci-start is unavailable in this environment"
+
           eval "$TIMEOUT_CMD configure-ci-otel \
             --suite $JOB_NAME \
             --service-name "pytest-observability" \
