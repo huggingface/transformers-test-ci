@@ -392,6 +392,7 @@ jobs:
           uv pip uninstall torchvision -q
           python -c "from transformers import *" || (echo 'import failed with torch+PIL but no torchvision. Fix unprotected imports!!'; exit 1)
           uv pip install -e ".[quality]" -q
+          exit -1
 
       # Cancel the entire workflow run so that test jobs (which run in parallel
       # and do NOT need: this job) are not wasted when consistency checks fail.
