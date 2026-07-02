@@ -287,6 +287,8 @@ jobs:
       TRANSFORMERS_TEST_OTEL_PR: ${{ github.event.pull_request.number }}
       # Job grouping for the dashboards (the YAML job key, e.g. check_repository_consistency).
       TRANSFORMERS_TEST_OTEL_SUITE: ${{ github.job }}
+    permissions:
+      actions: write   # required to cancel the workflow run on failure
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -390,6 +392,19 @@ jobs:
           uv pip uninstall torchvision -q
           python -c "from transformers import *" || (echo 'import failed with torch+PIL but no torchvision. Fix unprotected imports!!'; exit 1)
           uv pip install -e ".[quality]" -q
+
+      # Cancel the entire workflow run so that test jobs (which run in parallel
+      # and do NOT need: this job) are not wasted when consistency checks fail.
+      # `failure()` is true when any earlier step in this job exited non-zero.
+      - name: Cancel workflow run on consistency failure
+        if: failure()
+        run: |
+          echo "check_repository_consistency failed — cancelling workflow run ${{ github.run_id }}"
+          curl -s -o /dev/null -w "HTTP status: %{http_code}\n" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
 
   # ===========================================================================
   # Stage 2 — Test jobs
